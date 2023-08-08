@@ -1,15 +1,17 @@
 cmake_minimum_required(VERSION 3.8)
 project(laser_copilot)
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
+add_compile_options( -std=c++2a -O3)
 
 # find dependencies
-find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package (ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies ()
+
+ament_auto_add_library(obj_dist_component SHARED src/obj_dist_node.cpp)
+rclcpp_components_register_nodes(obj_dist_component 
+  "laser_copilot::obj_dist"
+)
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -23,4 +25,16 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-ament_package()
+install(
+  TARGETS obj_dist_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install (
+  DIRECTORY   launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+ament_auto_package()
