@@ -6,7 +6,7 @@ from launch_ros.descriptions import ComposableNode
 def generate_launch_description():
     """Generate launch description with multiple components."""
     container = ComposableNodeContainer(
-            name='obj_dist_container',
+            name='laser_copilot_container',
             namespace='',
             package='rclcpp_components',
             executable='component_container',
