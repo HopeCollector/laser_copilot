@@ -23,7 +23,6 @@ public:
       : Node("obj_dist_node", options) {
     decl_param();
     load_param();
-    is_changed_.resize(GROUP_NUM);
     pub_ls_ = create_publisher<sensor_msgs::msg::LaserScan>(
         "out/laser_scan", rclcpp::SensorDataQoS());
     sub_lvx_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
@@ -47,10 +46,10 @@ private:
   }
 
   void lvx_cb(livox_ros_driver2::msg::CustomMsg::ConstSharedPtr msg) {
-    static std::vector<float> prv_ranges;
-    std::fill(is_changed_.begin(), is_changed_.end(), false);
+    static sensor_msgs::msg::LaserScan prv_ls;
     sensor_msgs::msg::LaserScan ls = new_laser_scan_msg(msg->header);
     ls.scan_time = msg->points.back().offset_time / 1e9f;
+    ls.time_increment = ls.scan_time / msg->point_num;
     auto &range_min = ls.range_min;
     auto &range_max = ls.range_max;
     auto &ranges = ls.ranges;
@@ -64,18 +63,23 @@ private:
       range = std::min(range, dist(p.x, p.y));
       range_max = std::max(range, range_max);
       range_min = std::min(range, range_min);
-      is_changed_[idx] = true;
     }
-    if (!prv_ranges.empty()) {
+    if (range_max == 0.0 && prv_ls.range_max != 0.0) {
+      prv_ls.header = ls.header;
+      ls = prv_ls;
+    } else if (range_max > 0.0) {
+      auto &prv_ranges = prv_ls.ranges;
+      prv_ranges.resize(GROUP_NUM);
       for (int i = 0; i < GROUP_NUM; i++) {
-
-        if (is_changed_[i])
-          continue;
-        ranges[i] = prv_ranges[i];
+        if (ranges[i] < MAX_DIST) {
+          prv_ranges[i] = ranges[i];
+        } else {
+          ranges[i] = prv_ranges[i];
+        }
       }
+      copy_laser_scan_msg_expect_array(ls, prv_ls);
     }
     pub_ls_->publish(ls);
-    prv_ranges.swap(ranges);
   }
 
   sensor_msgs::msg::LaserScan new_laser_scan_msg(const std_msgs::msg::Header &header) {
@@ -97,9 +101,20 @@ private:
     return p.z <= z_max_ && p.z >= z_min_ && dist(p.x, p.y) >= distance_;
   }
 
+  void copy_laser_scan_msg_expect_array(sensor_msgs::msg::LaserScan &src,
+                                        sensor_msgs::msg::LaserScan &dst) {
+    dst.header = src.header;
+    dst.angle_min = src.angle_min;
+    dst.angle_max = src.angle_max;
+    dst.angle_increment = src.angle_increment;
+    dst.time_increment = src.time_increment;
+    dst.scan_time = src.scan_time;
+    dst.range_min = src.range_min;
+    dst.range_max = src.range_max;
+  }
+
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr sub_lvx_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr pub_ls_;
-  std::vector<bool> is_changed_;
   double z_max_, z_min_;
   double distance_;
 };
