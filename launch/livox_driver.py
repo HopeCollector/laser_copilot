@@ -25,6 +25,13 @@ user_config_path = PathJoinSubstitution(
 
 
 def livox_config_file_path():
+    user_config_path = PathJoinSubstitution(
+        [
+            FindPackageShare("livox_ros_driver2"),
+            "config",
+            "mid360_up.json",
+        ]
+    )
     if "twd:=up" in sys.argv:
         print("lidar will be set to towards up")
         user_config_path = PathJoinSubstitution(
@@ -46,11 +53,11 @@ def livox_config_file_path():
     else:
         print('need "twd:=[up|down]"')
         raise ("need a direction")
+    return user_config_path
 
 
 def generate_launch_description():
     """Generate launch description with multiple components."""
-    livox_config_file_path()
     livox_ros2_params = [
         {"xfer_format": xfer_format},
         {"multi_topic": multi_topic},
@@ -59,7 +66,7 @@ def generate_launch_description():
         {"output_data_type": output_type},
         {"frame_id": frame_id},
         {"lvx_file_path": lvx_file_path},
-        {"user_config_path": user_config_path},
+        {"user_config_path": livox_config_file_path()},
         {"cmdline_input_bd_code": cmdline_bd_code},
     ]
     container = ComposableNodeContainer(
