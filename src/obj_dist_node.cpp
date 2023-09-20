@@ -66,9 +66,13 @@ private:
       range_min = std::min(range, range_min);
       is_changed_[idx] = true;
     }
-    for(int i = 0; i < GROUP_NUM; i++) {
-      if(is_changed_[i]) continue;
-      ranges[i] = prv_ranges[i];
+    if (!prv_ranges.empty()) {
+      for (int i = 0; i < GROUP_NUM; i++) {
+
+        if (is_changed_[i])
+          continue;
+        ranges[i] = prv_ranges[i];
+      }
     }
     pub_ls_->publish(ls);
     prv_ranges.swap(ranges);
