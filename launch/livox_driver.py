@@ -1,3 +1,4 @@
+import sys
 import launch
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
@@ -33,9 +34,32 @@ livox_ros2_params = [
 ]
 # livox ros driver param
 
+def livox_config_file_path():
+    if 'twd:=up' in sys.argv:
+        print('lidar will be set to towards up')
+        livox_ros2_params["user_config_path"] = PathJoinSubstitution(
+            [
+                FindPackageShare("livox_ros_driver2"),
+                "config",
+                "mid360_up.json",
+            ]
+        )
+    elif 'twd:=down' in sys.argv:
+        print('lidar will be set to towards down')
+        livox_ros2_params["user_config_path"] = PathJoinSubstitution(
+            [
+                FindPackageShare("livox_ros_driver2"),
+                "config",
+                "mid360_down.json",
+            ]
+        )
+    else:
+        print('need "twd:=[up|down]"')
+        raise('need a direction')
 
 def generate_launch_description():
     """Generate launch description with multiple components."""
+    livox_config_file_path()
     container = ComposableNodeContainer(
         name="laser_copilot_container",
         namespace="",
