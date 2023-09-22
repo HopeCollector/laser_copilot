@@ -57,8 +57,7 @@ private:
       const auto &p = msg->points[i];
       if (!is_in_detect_range(p))
         continue;
-      auto idx = id(p.x, p.y);
-      auto &range = ranges[idx];
+      auto &range = ranges[id(p.x, p.y)];
       auto tmp = range;
       range = std::min(range, dist(p.x, p.y));
       range_max = std::max(range, range_max);
@@ -69,12 +68,18 @@ private:
       ls = prv_ls;
     } else if (range_max > 0.0) {
       auto &prv_ranges = prv_ls.ranges;
+      range_max = 0.0;
+      range_min = MAX_DIST;
       prv_ranges.resize(GROUP_NUM);
       for (int i = 0; i < GROUP_NUM; i++) {
         if (ranges[i] < MAX_DIST) {
           prv_ranges[i] = ranges[i];
         } else {
           ranges[i] = prv_ranges[i];
+        }
+        if (ranges[i] < MAX_DIST) {
+          range_max = std::max(ranges[i], range_max);
+          range_min = std::min(ranges[i], range_min);
         }
       }
       copy_laser_scan_msg_expect_array(ls, prv_ls);
