@@ -37,4 +37,16 @@ install (
   DESTINATION share/${PROJECT_NAME}
 )
 
+# install python module for others to use
+# currently donnot need this
+find_package(ament_cmake_python REQUIRED)
+ament_python_install_package(${PROJECT_NAME})
+
+# install scripts to lib/${PROJECT_NAME} is the most important
+find_package(rclpy REQUIRED)
+install(DIRECTORY
+  scripts/
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_auto_package()

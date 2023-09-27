@@ -8,7 +8,9 @@
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+  <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
   <depend>pcl_conversions</depend>
   <depend>livox_ros_driver2</depend>
