@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
 
-import os
+import math
 import rclpy
 import rclpy.qos as qos
 from rclpy.node import Node
+from rclpy.time import Time
 from mavros_msgs.msg import PositionTarget
 from mavros_msgs.srv import SetMode
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Point
-from typing import List
+from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import Point, PointStamped, PoseStamped
+from visualization_msgs.msg import Marker
 
 
 class tracker(Node):
-    sp: PositionTarget
-    cur_pos: Odometry
-    sp_list: List[PositionTarget]
-
     def __init__(self):
         super().__init__("tracker")
-        self.pub = self.create_publisher(
+        self.cur_pos = Odometry()
+        self.sp: PositionTarget = None
+        self.sp_list: list[PositionTarget] = []
+        self.filename: str = ""
+        self.is_pub_visual_msg: bool = True
+        self.load_param()
+        self.sp_list = csv2targets(self.filename)
+        if self.is_pub_visual_msg:
+            self.init_visual_support()
+        self.pub_ctl = self.create_publisher(
             PositionTarget, "/mavros/setpoint_raw/local", 10
         )
         self.sub_odom = self.create_subscription(
@@ -27,24 +33,67 @@ class tracker(Node):
             self.odom_cb,
             qos.qos_profile_sensor_data,
         )
-        self.timer = self.create_timer(0.05, self.timer_cb)
-        self.declare_parameter("setpoint_file_name", "")
-        filename = str(self.get_parameter("setpoint_file_name").value)
-        self.sp_list = csv2targets(filename)
-        self.cur_pos = Odometry()
-        self.sp: PositionTarget = None
         self.update_sp()
+        self.timer = self.create_timer(0.05, self.timer_cb)
         if self.switch_to_offboard_mode():
+            self.publish_path()
             self.get_logger().info("ready to takeoff")
         else:
             exit()
 
+    def load_param(self):
+        self.declare_parameter("setpoint_file_name", "")
+        self.declare_parameter("enable_visual_msg", True)
+        self.filename = str(self.get_parameter("setpoint_file_name").value)
+        self.is_pub_visual_msg = bool(self.get_parameter("enable_visual_msg").value)
+
+    def init_visual_support(self):
+        # path that drone will follow, only need pub once
+        self.pub_path_target = self.create_publisher(Marker, "out/path/target", 10)
+        msg = Marker()
+        msg.header.frame_id = "odom"
+        msg.header.stamp = Time().to_msg()
+        msg.ns = "laser_copilot_vmsg"
+        msg.id = 0
+        msg.type = Marker.LINE_STRIP
+        msg.action = Marker.ADD
+        msg.scale.x = 0.05
+        msg.color.a = msg.color.g = 1.0
+        for sp in self.sp_list:
+            msg.points.append(sp.position)
+        self.vmsg_path_tgt = msg
+        # path the drone really fly
+        self.pub_path_real = self.create_publisher(Path, "out/path/real", 10)
+        self.vmsg_path_real = Path()
+        self.vmsg_path_real.header.frame_id = "odom"
+        # point the drone is going to
+        self.pub_sp_target = self.create_publisher(Marker, "out/setpoint/target", 10)
+        msg = Marker()
+        msg.header.frame_id = "odom"
+        msg.ns = "laser_copilot_vmsg"
+        msg.id = 1
+        msg.type = Marker.CUBE
+        msg.scale.x = msg.scale.y = msg.scale.z = 0.5
+        msg.color.a = msg.color.r = 1.0
+        self.vmsg_sp_tgt = msg
+        # speed vector, the longer the faster
+        self.pub_sp_arrow = self.create_publisher(Marker, "out/setpoint/velocity", 10)
+        msg = Marker()
+        msg.header.frame_id = "odom"
+        msg.ns = "laser_copilot_vmsg"
+        msg.id = 2
+        msg.type = Marker.ARROW
+        msg.scale.x = 0.2
+        msg.scale.y = 0.4
+        msg.color.a = msg.color.r = msg.color.g = 1.0
+        self.vmsg_sp_arrow = msg
+
     def switch_to_offboard_mode(self) -> bool:
-        client = self.create_client(SetMode, '/mavros/set_mode')
+        client = self.create_client(SetMode, "/mavros/set_mode")
         while not client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('/mavros/set_mode service not avaliable')
+            self.get_logger().info("/mavros/set_mode service not avaliable")
         req = SetMode.Request()
-        req.custom_mode = 'OFFBOARD'
+        req.custom_mode = "OFFBOARD"
         future = client.call_async(req)
         rclpy.spin_until_future_complete(self, future)
         return future.result()
@@ -60,20 +109,60 @@ class tracker(Node):
             return
         if self.sp != None and not self.is_ok_go_next():
             return
-        self.sp = self.sp_list.pop(0)
-        print(f"go to next position {self.sp.position}")
+        while len(self.sp_list) > 0 and (
+            dist(self.cur_pos.pose.pose.position, self.sp_list[0].position) < 2.0
+            or self.sp_list[0].position.z < 1.0
+        ):
+            self.sp_list.pop(0)
+        if len(self.sp_list) > 0:
+            self.sp = self.sp_list.pop(0)
+        print(f"going to {self.sp.position}")
 
     ## publish setpoint
     def timer_cb(self):
         if self.sp == None:
             return
         self.sp.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
-        self.pub.publish(self.sp)
+        self.pub_ctl.publish(self.sp)
+        self.publish_setpoint()
 
     ## update current position
     def odom_cb(self, msg: Odometry):
         self.cur_pos = msg
         self.update_sp()
+        self.publish_path()
+
+    def publish_path(self):
+        if not self.is_pub_visual_msg:
+            return
+        p = PoseStamped()
+        p.header.frame_id = "odom"
+        p.header.stamp = self.get_clock().now().to_msg()
+        p.pose = self.cur_pos.pose.pose
+        self.vmsg_path_real.poses.append(p)
+        self.vmsg_path_real.header.stamp = p.header.stamp
+        self.pub_path_real.publish(self.vmsg_path_real)
+        self.pub_path_target.publish(self.vmsg_path_tgt)
+
+    def publish_setpoint(self):
+        if not self.is_pub_visual_msg:
+            return
+        # delete previous point
+        self.vmsg_sp_tgt.header.stamp = self.get_clock().now().to_msg()
+        # self.vmsg_sp_tgt.action = Marker.DELETE
+        # self.pub_sp_target.publish(self.vmsg_sp_tgt)
+        # add new point
+        self.vmsg_sp_tgt.action = Marker.ADD
+        self.vmsg_sp_tgt.pose.position = self.sp.position
+        self.pub_sp_target.publish(self.vmsg_sp_tgt)
+        # delete previous arrow
+        self.vmsg_sp_arrow.header.stamp = self.get_clock().now().to_msg()
+        # self.vmsg_sp_arrow.action = Marker.DELETE
+        # self.pub_sp_arrow.publish(self.vmsg_sp_arrow)
+        # add new arrow
+        self.vmsg_sp_arrow.action = Marker.ADD
+        self.vmsg_sp_arrow.points = [self.cur_pos.pose.pose.position, self.sp.position]
+        self.pub_sp_arrow.publish(self.vmsg_sp_arrow)
 
 
 def main(args=None):
@@ -82,6 +171,10 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
+
+def dist(a: Point, b: Point):
+    return math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2)
 
 
 def xyz2target(*args) -> PositionTarget:
@@ -105,7 +198,7 @@ def str2target(s: str) -> PositionTarget:
     return tgt
 
 
-def csv2targets(file: str) -> List[PositionTarget]:
+def csv2targets(file: str) -> list[PositionTarget]:
     ret = []
     with open(file, "r") as f:
         for line in f.readlines():
