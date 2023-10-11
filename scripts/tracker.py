@@ -83,8 +83,8 @@ class tracker(Node):
         msg.ns = "laser_copilot_vmsg"
         msg.id = 2
         msg.type = Marker.ARROW
-        msg.scale.x = 0.2
-        msg.scale.y = 0.4
+        msg.scale.x = 0.1
+        msg.scale.y = 0.2
         msg.color.a = msg.color.r = msg.color.g = 1.0
         self.vmsg_sp_arrow = msg
 
@@ -165,36 +165,19 @@ class tracker(Node):
         self.pub_sp_arrow.publish(self.vmsg_sp_arrow)
 
 
-def main(args=None):
-    rclpy.init(args=args)
-    node = tracker()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
-
-
 def dist(a: Point, b: Point):
     return math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2)
 
 
-def xyz2target(*args) -> PositionTarget:
-    xyz = []
-    if len(args) == 1:
-        xyz = args[0]
-    elif len(args) == 3:
-        xyz = args
-    p = Point()
-    p.x = xyz[0]
-    p.y = xyz[1]
-    p.z = xyz[2]
-    tgt = PositionTarget()
-    tgt.position = p
-    return tgt
-
-
 def str2target(s: str) -> PositionTarget:
     pos = [float(x) for x in s.split(",")]
-    tgt = xyz2target(pos)
+    p = Point()
+    p.x = pos[0]
+    p.y = pos[1]
+    p.z = pos[2]
+    tgt = PositionTarget()
+    tgt.position = p
+    tgt.yaw = pos[3] / 180.0 * math.pi
     return tgt
 
 
@@ -204,6 +187,14 @@ def csv2targets(file: str) -> list[PositionTarget]:
         for line in f.readlines():
             ret.append(str2target(line))
     return ret
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = tracker()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":

@@ -3,9 +3,11 @@
 import rclpy
 import os
 import sys
+from math import atan2
 from pathlib import Path
 from rclpy.node import Node
 from rosbags.highlevel import AnyReader
+from scipy.spatial.transform import Rotation
 
 
 def cvt_on_fly():
@@ -19,7 +21,10 @@ def cvt_from_bag(filename: str, topicname: str, outfilename: str):
         for connection, timestamp, rawdata in reader.messages(connections=connections):
             msg = reader.deserialize(rawdata, connection.msgtype)
             pos = msg.pose.pose.position
-            poses += f'{pos.x},{pos.y},{pos.z}\n'
+            ori = msg.pose.pose.orientation
+            ori = Rotation.from_quat([ori.x, ori.y, ori.z, ori.w])
+            roll, pitch, yaw = ori.as_euler('xyz', degrees=True)
+            poses += f'{pos.x},{pos.y},{pos.z},{yaw}\n'
     with open(outfilename, 'w') as out:
         out.write(poses)
 
