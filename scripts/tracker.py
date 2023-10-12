@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import math
+import numpy as np
 import rclpy
 import rclpy.qos as qos
 from rclpy.node import Node
@@ -10,6 +11,7 @@ from mavros_msgs.srv import SetMode
 from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import Point, PointStamped, PoseStamped
 from visualization_msgs.msg import Marker
+from functools import reduce
 
 
 class tracker(Node):
@@ -20,6 +22,10 @@ class tracker(Node):
         self.sp_list: list[PositionTarget] = []
         self.filename: str = ""
         self.is_pub_visual_msg: bool = True
+        self.track_distance: float = 0.5
+        self.max_speed = 2.0
+        self.speed_ratio = 0.8
+        self.dangerous_height = 0.3
         self.load_param()
         self.sp_list = csv2targets(self.filename)
         if self.is_pub_visual_msg:
@@ -33,19 +39,23 @@ class tracker(Node):
             self.odom_cb,
             qos.qos_profile_sensor_data,
         )
-        self.update_sp()
         self.timer = self.create_timer(0.05, self.timer_cb)
         if self.switch_to_offboard_mode():
-            self.publish_path()
             self.get_logger().info("ready to takeoff")
+            self.update_sp()
+            self.publish_path()
         else:
             exit()
 
     def load_param(self):
         self.declare_parameter("setpoint_file_name", "")
         self.declare_parameter("enable_visual_msg", True)
+        self.declare_parameter("track_distance", 0.5)
+        self.declare_parameter("max_speed", 2.0)
         self.filename = str(self.get_parameter("setpoint_file_name").value)
         self.is_pub_visual_msg = bool(self.get_parameter("enable_visual_msg").value)
+        self.track_distance = float(self.get_parameter("track_distance").value)
+        self.max_speed = float(self.get_parameter("max_speed").value)
 
     def init_visual_support(self):
         # path that drone will follow, only need pub once
@@ -102,17 +112,14 @@ class tracker(Node):
         dx2 = (self.cur_pos.pose.pose.position.x - self.sp.position.x) ** 2
         dy2 = (self.cur_pos.pose.pose.position.y - self.sp.position.y) ** 2
         dz2 = (self.cur_pos.pose.pose.position.z - self.sp.position.z) ** 2
-        return dx2 + dy2 + dz2 <= 1
+        return dx2 + dy2 + dz2 <= self.track_distance
 
     def update_sp(self):
         if len(self.sp_list) == 0:
             return
         if self.sp != None and not self.is_ok_go_next():
             return
-        while len(self.sp_list) > 0 and (
-            dist(self.cur_pos.pose.pose.position, self.sp_list[0].position) < 2.0
-            or self.sp_list[0].position.z < 1.0
-        ):
+        while len(self.sp_list) > 0 and self.sp_list[0].position.z < self.dangerous_height:
             self.sp_list.pop(0)
         if len(self.sp_list) > 0:
             self.sp = self.sp_list.pop(0)
@@ -122,8 +129,21 @@ class tracker(Node):
     def timer_cb(self):
         if self.sp == None:
             return
-        self.sp.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
-        self.pub_ctl.publish(self.sp)
+        p = self.cur_pos.pose.pose.position
+        cur_pos = np.array([p.x, p.y, p.z])
+        p = self.sp.position
+        sp_pos = np.array([p.x, p.y, p.z])
+        vel = sp_pos - cur_pos
+        vel = (sp_pos - cur_pos) * self.max_speed / self.track_distance
+        msg = PositionTarget()
+        msg.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
+        msg.position = self.sp.position
+        msg.velocity.x = self.speed_ratio * vel[0] + (1 - self.speed_ratio) * self.sp.velocity.x
+        msg.velocity.y = self.speed_ratio * vel[1] + (1 - self.speed_ratio) * self.sp.velocity.y
+        msg.velocity.z = self.speed_ratio * vel[2] + (1 - self.speed_ratio) * self.sp.velocity.z
+        msg.yaw = self.sp.yaw
+        self.sp.velocity = msg.velocity
+        self.pub_ctl.publish(msg)
         self.publish_setpoint()
 
     ## update current position
@@ -176,6 +196,7 @@ def str2target(s: str) -> PositionTarget:
     p.y = pos[1]
     p.z = pos[2]
     tgt = PositionTarget()
+    tgt.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
     tgt.position = p
     tgt.yaw = pos[3] / 180.0 * math.pi
     return tgt
