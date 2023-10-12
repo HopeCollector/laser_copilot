@@ -25,6 +25,7 @@ class tracker(Node):
         self.track_distance: float = 0.5
         self.max_speed = 2.0
         self.speed_ratio = 0.8
+        self.dangerous_height = 0.3
         self.load_param()
         self.sp_list = csv2targets(self.filename)
         if self.is_pub_visual_msg:
@@ -118,7 +119,7 @@ class tracker(Node):
             return
         if self.sp != None and not self.is_ok_go_next():
             return
-        while len(self.sp_list) > 0 and self.sp_list[0].position.z < 0.3:
+        while len(self.sp_list) > 0 and self.sp_list[0].position.z < self.dangerous_height:
             self.sp_list.pop(0)
         if len(self.sp_list) > 0:
             self.sp = self.sp_list.pop(0)
