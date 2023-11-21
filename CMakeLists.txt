@@ -7,9 +7,17 @@ add_compile_options( -std=c++2a -O3)
 find_package (ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies ()
 
+find_package(Eigen3 REQUIRED)
+
 ament_auto_add_library(obj_dist_component SHARED src/obj_dist_node.cpp)
 rclcpp_components_register_nodes(obj_dist_component 
   "laser_copilot::obj_dist"
+)
+
+ament_auto_add_library(safe_fly_controller_component SHARED src/safe_fly_controller.cc)
+target_link_libraries(safe_fly_controller_component Eigen3::Eigen)
+rclcpp_components_register_nodes(safe_fly_controller_component
+  "laser_copilot::safe_fly_controller"
 )
 
 
