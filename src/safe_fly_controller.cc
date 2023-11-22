@@ -1,4 +1,4 @@
-#include <Eigen/Eigen>
+#include "common.hh"
 #include <chrono>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <px4_msgs/msg/offboard_control_mode.hpp>
@@ -7,63 +7,18 @@
 #include <px4_msgs/msg/vehicle_status.hpp>
 #include <rclcpp/rclcpp.hpp>
 namespace laser_copilot {
-enum class controller_state { disarmed, armed, takeoff, hold, ctrl };
-
-double quaternion_to_yaw(Eigen::Quaterniond q) {
-  Eigen::Vector3d vec = q * Eigen::Vector3d::UnitX();
-  return std::atan2(vec[1], vec[0]);
-}
-
-struct pid_controller {
-  double kp = 1.0;
-  double ki = 0.0;
-  double kd = 0.0;
-  double last_err = 0.0;
-  double all_err = 0.0;
-  double operator()(double setpoint, double measure) {
-    double err = setpoint - measure;
-    all_err += err;
-    double delta = err - last_err;
-    double output = kp * err + ki * all_err + kd * delta;
-    last_err = err;
-    return output;
-  }
-  double operator()(double err) {
-    all_err += err;
-    double delta = err - last_err;
-    double output = kp * err + ki * all_err + kd * delta;
-    last_err = err;
-    return output;
-  }
-};
-
-struct pose_t {
-  Eigen::Vector3d position = Eigen::Vector3d::Zero();
-  Eigen::Quaterniond orientation = Eigen::Quaterniond::Identity();
-  Eigen::Vector3d linear_vel = Eigen::Vector3d::Zero();
-  Eigen::Vector3d angle_vel = Eigen::Vector3d::Zero();
-  float yaw = 0.0;
-};
-
-struct setpoint_t {
-  Eigen::Vector3d position = Eigen::Vector3d::Zero();
-  float yaw = 0.0;
-  setpoint_t(){}
-  setpoint_t(Eigen::Vector3d p, Eigen::Quaterniond q) {
-    position = p;
-    yaw = quaternion_to_yaw(q);
-  }
-  friend std::ostream& operator<< (std::ostream& os, const setpoint_t &sp) {
-    os << sp.position.transpose() << " " << sp.yaw / M_PI * 180.0;
-    return  os;
-  }
-};
-
 using namespace std::chrono_literals;
 class safe_fly_controller : public rclcpp::Node {
 public:
   explicit safe_fly_controller(const rclcpp::NodeOptions &options)
       : Node("safe_fly_controller", options), timer_50hz_(nullptr) {
+    init_pub_sub();
+    load_param();
+    init_ctrl_msg();
+  }
+
+private:
+  void init_pub_sub() {
     using std::placeholders::_1;
     sub_position_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
         "/fmu/out/vehicle_odometry", rclcpp::SensorDataQoS(),
@@ -77,10 +32,16 @@ public:
         "/fmu/in/trajectory_setpoint", rclcpp::SensorDataQoS());
     pub_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
         "/fmu/in/offboard_control_mode", rclcpp::SensorDataQoS());
+  }
+
+  void load_param() {
     max_speed_ = declare_parameter("max_speed", 2.0);
     max_acc_ = declare_parameter("max_acc", 1.0);
     max_yaw_speed_ = declare_parameter("max_yaw_speed", 30.0) / 180.0 * M_PI;
     yaw_frd_ned_ = declare_parameter("yaw_flu_ned", 90.0) / 180.0 * M_PI;
+  }
+
+  void init_ctrl_msg() {
     ctrl_msg_.position = false;
     ctrl_msg_.attitude = true;
     ctrl_msg_.velocity = true;
@@ -89,7 +50,6 @@ public:
     ctrl_msg_.actuator = false;
   }
 
-private:
   void cb_odometry(px4_msgs::msg::VehicleOdometry::ConstSharedPtr msg) {
     prv_pose_ = cur_pose_;
     cur_pose_.position << msg->position[0], msg->position[1], msg->position[2];
@@ -107,7 +67,7 @@ private:
   }
 
   void cb_goal(geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
-    auto & frame_id = msg->header.frame_id;
+    auto &frame_id = msg->header.frame_id;
     set_target(
         msg->header.frame_id.find("ned") == std::string::npos,
         {msg->pose.position.x, msg->pose.position.y, msg->pose.position.z},
@@ -125,15 +85,29 @@ private:
     go_to_target();
   }
 
-  void set_target(bool is_need_transform, Eigen::Vector3d position, Eigen::Quaterniond orientation) {
-    static const Eigen::Quaterniond T_flu_frd{
-        Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX())};
-    static const Eigen::Quaterniond T_frd_ned{
-        Eigen::AngleAxisd(yaw_frd_ned_, Eigen::Vector3d::UnitZ())};
-    static const Eigen::Quaterniond T_flu_ned = T_frd_ned * T_flu_frd;
-    if (is_need_transform){
-      target_ = setpoint_t(T_flu_ned * position,
-                           T_flu_ned * orientation * T_flu_ned.conjugate());
+  void set_target(bool is_need_transform, Eigen::Vector3d position,
+                  Eigen::Quaterniond orientation) {
+    static bool is_init_transformations = false;
+    static Eigen::Affine3d T_flu_ned;
+    if (!is_init_transformations) {
+      Eigen::Affine3d T_flu_frd = Eigen::Affine3d::Identity();
+      T_flu_frd.linear() =
+          Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()).toRotationMatrix();
+
+      Eigen::Affine3d T_frd_ned = Eigen::Affine3d::Identity();
+      T_frd_ned.linear() =
+          Eigen::AngleAxisd(yaw_frd_ned_, Eigen::Vector3d::UnitZ())
+              .toRotationMatrix();
+      T_flu_ned = T_frd_ned * T_flu_frd;
+      is_init_transformations = true;
+    }
+    if (is_need_transform) {
+      Eigen::Affine3d T_sp_flu = Eigen::Affine3d::Identity();
+      T_sp_flu.translation() = position;
+      T_sp_flu.linear() = orientation.toRotationMatrix();
+      T_sp_flu = T_flu_ned * T_sp_flu;
+      target_ = setpoint_t(Eigen::Vector3d{T_sp_flu.translation()},
+                           Eigen::Quaterniond{T_sp_flu.linear()});
     } else {
       target_ = setpoint_t(position, orientation);
     }
@@ -149,8 +123,8 @@ private:
       acc = max_acc_;
     }
     direction.normalize();
-    float vyaw = yaw_pid_(target_.yaw,
-                         quaternion_to_yaw(cur_pose_.orientation));
+    float vyaw =
+        yaw_pid_(target_.yaw, quaternion_to_yaw(cur_pose_.orientation));
     if (cur_pose_.position[2] >= -1.0) {
       vyaw = 0.0;
     } else if (std::abs(vyaw) > max_yaw_speed_) {
