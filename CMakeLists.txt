@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(laser_copilot)
 
 add_compile_options( -std=c++2a -O3)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # find dependencies
 find_package (ament_cmake_auto REQUIRED)
@@ -18,6 +19,12 @@ ament_auto_add_library(safe_fly_controller_component SHARED src/safe_fly_control
 target_link_libraries(safe_fly_controller_component Eigen3::Eigen)
 rclcpp_components_register_nodes(safe_fly_controller_component
   "laser_copilot::safe_fly_controller"
+)
+
+ament_auto_add_library(traj_replayer_component SHARED src/traj_replayer.cc)
+target_link_libraries(traj_replayer_component Eigen3::Eigen)
+rclcpp_components_register_nodes(traj_replayer_component
+  "laser_copilot::traj_replayer"
 )
 
 
