@@ -87,27 +87,8 @@ private:
 
   void set_target(bool is_need_transform, Eigen::Vector3d position,
                   Eigen::Quaterniond orientation) {
-    static bool is_init_transformations = false;
-    static Eigen::Affine3d T_flu_ned;
-    if (!is_init_transformations) {
-      Eigen::Affine3d T_flu_frd = Eigen::Affine3d::Identity();
-      T_flu_frd.linear() =
-          Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()).toRotationMatrix();
-
-      Eigen::Affine3d T_frd_ned = Eigen::Affine3d::Identity();
-      T_frd_ned.linear() =
-          Eigen::AngleAxisd(yaw_frd_ned_, Eigen::Vector3d::UnitZ())
-              .toRotationMatrix();
-      T_flu_ned = T_frd_ned * T_flu_frd;
-      is_init_transformations = true;
-    }
     if (is_need_transform) {
-      Eigen::Affine3d T_sp_flu = Eigen::Affine3d::Identity();
-      T_sp_flu.translation() = position;
-      T_sp_flu.linear() = orientation.toRotationMatrix();
-      T_sp_flu = T_flu_ned * T_sp_flu;
-      target_ = setpoint_t(Eigen::Vector3d{T_sp_flu.translation()},
-                           Eigen::Quaterniond{T_sp_flu.linear()});
+      target_ = flu_to_ned({position, orientation}, yaw_frd_ned_);
     } else {
       target_ = setpoint_t(position, orientation);
     }
@@ -123,8 +104,13 @@ private:
       acc = max_acc_;
     }
     direction.normalize();
-    float vyaw =
-        yaw_pid_(target_.yaw, quaternion_to_yaw(cur_pose_.orientation));
+    float yaw_err = target_.yaw - quaternion_to_yaw(cur_pose_.orientation);
+    if (yaw_err > M_PI) {
+      yaw_err -= 2 * M_PI;
+    } else if (yaw_err < -M_PI) {
+      yaw_err += 2 * M_PI;
+    }
+    float vyaw = yaw_pid_(yaw_err);
     if (cur_pose_.position[2] >= -1.0) {
       vyaw = 0.0;
     } else if (std::abs(vyaw) > max_yaw_speed_) {
