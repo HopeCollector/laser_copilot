@@ -13,7 +13,6 @@ def get_composable_node():
         name="controller",
         parameters=[{
             "use_sim_time": True,
-            "init_height": 10.0,
         }],
         remappings=[("/sub/goal", "/move_base_simple/goal")],
     )
