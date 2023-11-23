@@ -11,14 +11,14 @@ using namespace std::chrono_literals;
 class safe_fly_controller : public rclcpp::Node {
 public:
   explicit safe_fly_controller(const rclcpp::NodeOptions &options)
-      : Node("safe_fly_controller", options), timer_50hz_(nullptr) {
-    init_pub_sub();
+      : Node("safe_fly_controller", options){
+    init_cb();
     load_param();
     init_ctrl_msg();
   }
 
 private:
-  void init_pub_sub() {
+  void init_cb() {
     using std::placeholders::_1;
     sub_position_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
         "/fmu/out/vehicle_odometry", rclcpp::SensorDataQoS(),
@@ -32,6 +32,13 @@ private:
         "/fmu/in/trajectory_setpoint", rclcpp::SensorDataQoS());
     pub_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
         "/fmu/in/offboard_control_mode", rclcpp::SensorDataQoS());
+    timer_once_1s_ = create_wall_timer(1s, [this](){
+      this->yaw_frd_ned_ = quaternion_to_yaw(this->cur_pose_.orientation);
+      RCLCPP_INFO_STREAM(get_logger(),
+                         "detect ned -> frd yaw(degree): "
+                             << this->yaw_frd_ned_ / M_PI * 180.0);
+      this->timer_once_1s_->cancel();
+    });
   }
 
   void load_param() {
@@ -73,8 +80,8 @@ private:
         {msg->pose.position.x, msg->pose.position.y, msg->pose.position.z},
         {msg->pose.orientation.w, msg->pose.orientation.x,
          msg->pose.orientation.y, msg->pose.orientation.z});
-    if (!timer_50hz_) {
-      timer_50hz_ = create_wall_timer(
+    if(!timer_50hz_) {
+      timer_50hz_ = this->create_wall_timer(
           20ms, std::bind(&safe_fly_controller::cb_50hz, this));
     }
   }
@@ -144,6 +151,7 @@ private:
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr
       pub_mode_ctrl_ = nullptr;
   rclcpp::TimerBase::SharedPtr timer_50hz_ = nullptr;
+  rclcpp::TimerBase::SharedPtr timer_once_1s_ = nullptr;
   px4_msgs::msg::OffboardControlMode ctrl_msg_;
   double max_speed_;
   double max_acc_;
