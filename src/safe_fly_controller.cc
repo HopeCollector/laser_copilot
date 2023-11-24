@@ -6,6 +6,7 @@
 #include <px4_msgs/msg/vehicle_odometry.hpp>
 #include <px4_msgs/msg/vehicle_status.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
 namespace laser_copilot {
 using namespace std::chrono_literals;
 class safe_fly_controller : public rclcpp::Node {
@@ -32,20 +33,28 @@ private:
         "/fmu/in/trajectory_setpoint", rclcpp::SensorDataQoS());
     pub_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
         "/fmu/in/offboard_control_mode", rclcpp::SensorDataQoS());
+    pub_dbg_ = create_publisher<std_msgs::msg::Float64MultiArray>(
+        "/pub/debug", 5);
     timer_once_1s_ = create_wall_timer(1s, [this](){
-      this->yaw_frd_ned_ = quaternion_to_yaw(this->cur_pose_.orientation);
-      RCLCPP_INFO_STREAM(get_logger(),
-                         "detect ned -> frd yaw(degree): "
-                             << this->yaw_frd_ned_ / M_PI * 180.0);
       this->timer_once_1s_->cancel();
+      this->T_odomflu_odomned_.linear() = Eigen::Matrix3d(
+          Eigen::AngleAxisd(this->cur_pose_.yaw, Eigen::Vector3d::UnitZ()) *
+          Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
+      this->T_odomned_odomflu_ = this->T_odomflu_odomned_.inverse();
+      this->T_localflu_localfrd_.linear() =
+          Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()).toRotationMatrix();
+      this->T_localfrd_localflu_ = this->T_localflu_localfrd_.inverse();
+      RCLCPP_INFO_STREAM(get_logger(),
+                         "detect init yaw(degree) in odom_ned frame: "
+                             << this->cur_pose_.yaw / M_PI * 180.0);
     });
   }
 
   void load_param() {
     max_speed_ = declare_parameter("max_speed", 2.0);
     max_acc_ = declare_parameter("max_acc", 1.0);
+    max_jerk_ = declare_parameter("max_jerk", 0.2);
     max_yaw_speed_ = declare_parameter("max_yaw_speed", 30.0) / 180.0 * M_PI;
-    yaw_frd_ned_ = declare_parameter("yaw_flu_ned", 90.0) / 180.0 * M_PI;
   }
 
   void init_ctrl_msg() {
@@ -59,14 +68,23 @@ private:
 
   void cb_odometry(px4_msgs::msg::VehicleOdometry::ConstSharedPtr msg) {
     prv_pose_ = cur_pose_;
-    cur_pose_.position << msg->position[0], msg->position[1], msg->position[2];
-    cur_pose_.orientation =
-        Eigen::Quaterniond(msg->q[0], msg->q[1], msg->q[2], msg->q[3]);
+    Eigen::Affine3d T_localfrd_odomned = Eigen::Affine3d::Identity();
+    T_localfrd_odomned.translation() << msg->position[0], msg->position[1],
+        msg->position[2];
+    T_localfrd_odomned.linear() =
+        Eigen::Quaterniond(msg->q[0], msg->q[1], msg->q[2], msg->q[3])
+            .toRotationMatrix();
+    Eigen::Affine3d T_localflu_odomflu = T_odomned_odomflu_ * T_localfrd_odomned * T_localflu_localfrd_;
+    cur_pose_.position = T_localflu_odomflu.translation();
+    cur_pose_.orientation = T_localflu_odomflu.linear();
     cur_pose_.linear_vel << msg->velocity[0], msg->velocity[1],
         msg->velocity[2];
     cur_pose_.angle_vel << msg->angular_velocity[0], msg->angular_velocity[1],
         msg->angular_velocity[2];
+    cur_pose_.linear_vel = T_odomned_odomflu_ * cur_pose_.linear_vel;
+    cur_pose_.angle_vel = T_odomned_odomflu_ * cur_pose_.angle_vel;
     cur_pose_.yaw = quaternion_to_yaw(cur_pose_.orientation);
+    cur_pose_.stamp = msg->timestamp * 1000; // us -> ns
   }
 
   void cb_status(px4_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
@@ -74,9 +92,7 @@ private:
   }
 
   void cb_goal(geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
-    auto &frame_id = msg->header.frame_id;
-    set_target(
-        msg->header.frame_id.find("ned") == std::string::npos,
+    target_ = setpoint_t(
         {msg->pose.position.x, msg->pose.position.y, msg->pose.position.z},
         {msg->pose.orientation.w, msg->pose.orientation.x,
          msg->pose.orientation.y, msg->pose.orientation.z});
@@ -84,6 +100,9 @@ private:
       timer_50hz_ = this->create_wall_timer(
           20ms, std::bind(&safe_fly_controller::cb_50hz, this));
     }
+    RCLCPP_INFO_STREAM(get_logger(),
+                       "goint to: " << target_.position.transpose() << " "
+                                    << target_.yaw / M_PI * 180.0);
   }
 
   void cb_50hz() {
@@ -92,50 +111,50 @@ private:
     go_to_target();
   }
 
-  void set_target(bool is_need_transform, Eigen::Vector3d position,
-                  Eigen::Quaterniond orientation) {
-    if (is_need_transform) {
-      target_ = flu_to_ned({position, orientation}, yaw_frd_ned_);
-    } else {
-      target_ = setpoint_t(position, orientation);
-    }
-    RCLCPP_INFO_STREAM(get_logger(), "going to: " << target_);
-  }
-
   void go_to_target() {
-    Eigen::Vector3d direction = target_.position - cur_pose_.position;
-    double speed = std::min(max_speed_, vel_pid_(direction.norm()));
-    double acc = speed - cur_pose_.linear_vel.norm();
-    if (acc > max_acc_) {
-      speed = cur_pose_.linear_vel.norm() + max_acc_;
-      acc = max_acc_;
+    Eigen::Vector3d speed_vec = target_.position - cur_pose_.position;
+    Eigen::Vector3d speed_dir = speed_vec / speed_vec.norm();
+    speed_vec = vel_pid_(speed_vec.norm()) * speed_dir;
+    Eigen::Vector3d acc_vec = speed_vec - cur_pose_.linear_vel;
+    Eigen::Vector3d acc_dir = acc_vec / acc_vec.norm();
+    acc_vec = std::min(max_acc_, acc_vec.norm()) * acc_dir;
+    speed_vec = std::min(max_speed_, (cur_pose_.linear_vel + acc_vec).norm()) *
+                speed_dir;
+
+    double vyaw = target_.yaw - cur_pose_.yaw;
+    if (vyaw > M_PI) {
+      vyaw -= 2 * M_PI;
+    } else if (vyaw < -M_PI) {
+      vyaw += 2 * M_PI;
     }
-    direction.normalize();
-    float yaw_err = target_.yaw - quaternion_to_yaw(cur_pose_.orientation);
-    if (yaw_err > M_PI) {
-      yaw_err -= 2 * M_PI;
-    } else if (yaw_err < -M_PI) {
-      yaw_err += 2 * M_PI;
-    }
-    float vyaw = yaw_pid_(yaw_err);
-    if (cur_pose_.position[2] >= -1.0) {
-      vyaw = 0.0;
-    } else if (std::abs(vyaw) > max_yaw_speed_) {
-      vyaw = vyaw / std::abs(vyaw) * max_yaw_speed_;
-    }
-    action_set_speed((direction * speed).cast<float>(),
-                     (direction * acc).cast<float>(), vyaw);
+    int vyaw_dir = vyaw / std::abs(vyaw);
+    vyaw = std::min(std::abs(vyaw), max_yaw_speed_) * vyaw_dir;
+
+    action_set_speed(speed_vec, acc_vec, vyaw);
+
+    std_msgs::msg::Float64MultiArray dbg_msg;
+    dbg_msg.data.push_back(cur_pose_.position[0]);
+    dbg_msg.data.push_back(cur_pose_.position[1]);
+    dbg_msg.data.push_back(cur_pose_.position[2]);
+    dbg_msg.data.push_back(speed_vec.norm());
+    dbg_msg.data.push_back(acc_vec.norm());
+    dbg_msg.data.push_back(vyaw); // 5
+    dbg_msg.data.push_back(cur_pose_.linear_vel.norm()); // 6
+    dbg_msg.data.push_back(cur_pose_.yaw / M_PI * 180.0); // 7
+    pub_dbg_->publish(dbg_msg);
   }
 
-  void action_set_speed(Eigen::Vector3f vel, Eigen::Vector3f acc, float vyaw) {
+  void action_set_speed(Eigen::Vector3d vel, Eigen::Vector3d acc, double vyaw) {
+    vel = T_odomflu_odomned_ * vel;
+    acc = T_odomflu_odomned_ * acc;
     px4_msgs::msg::TrajectorySetpoint msg;
     msg.timestamp = get_clock()->now().nanoseconds() * 1e-3;
     msg.position = {NAN, NAN, NAN};
     msg.yaw = NAN;
-    msg.velocity = {vel[0], vel[1], vel[2]};
-    msg.acceleration = {acc[0], acc[1], acc[2]};
+    msg.velocity = {float(vel[0]), float(vel[1]), float(vel[2])};
+    msg.acceleration = {float(acc[0]), float(acc[1]), float(acc[2])};
     msg.jerk = {NAN, NAN, NAN};
-    msg.yawspeed = vyaw;
+    msg.yawspeed = (T_odomflu_odomned_ * Eigen::Vector3d{0, 0, vyaw})[2];
     pub_cmd_->publish(msg);
   }
 
@@ -150,13 +169,18 @@ private:
       nullptr;
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr
       pub_mode_ctrl_ = nullptr;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr pub_dbg_ = nullptr;
   rclcpp::TimerBase::SharedPtr timer_50hz_ = nullptr;
   rclcpp::TimerBase::SharedPtr timer_once_1s_ = nullptr;
   px4_msgs::msg::OffboardControlMode ctrl_msg_;
+  Eigen::Affine3d T_odomflu_odomned_ = Eigen::Affine3d::Identity();
+  Eigen::Affine3d T_odomned_odomflu_ = Eigen::Affine3d::Identity();
+  Eigen::Affine3d T_localflu_localfrd_ = Eigen::Affine3d::Identity();
+  Eigen::Affine3d T_localfrd_localflu_ = Eigen::Affine3d::Identity();
   double max_speed_;
   double max_acc_;
+  double max_jerk_;
   double max_yaw_speed_;
-  double yaw_frd_ned_;
   pose_t cur_pose_;
   pose_t prv_pose_;
   setpoint_t target_;

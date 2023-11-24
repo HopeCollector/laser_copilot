@@ -31,6 +31,7 @@ struct pid_controller {
 };
 
 struct pose_t {
+  uint64_t stamp; // nanosec
   Eigen::Vector3d position = Eigen::Vector3d::Zero();
   Eigen::Quaterniond orientation = Eigen::Quaterniond::Identity();
   Eigen::Vector3d linear_vel = Eigen::Vector3d::Zero();
@@ -93,5 +94,38 @@ setpoint_t flu_to_ned(const setpoint_t& sp, double yaw_frd_ned) {
     is_init_transformations = true;
   }
   return {T_flu_ned * sp.to_affine()};
+}
+
+/**
+ * @brief transform setpoint from flu frame to ned frame, the secquence is
+ *        ned -> frd -> flu
+ * @param sp: setpoint in ned frame
+ * @param yaw_frd_ned: radius yaw angle bewteen from ned to frd
+ */
+setpoint_t ned_to_flu(const setpoint_t &sp, double yaw_frd_ned) {
+  static bool is_init_transformations = false;
+  static Eigen::Affine3d T_ned_flu;
+  if (!is_init_transformations) {
+    Eigen::Affine3d T_flu_frd = Eigen::Affine3d::Identity();
+    T_flu_frd.linear() =
+        Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()).toRotationMatrix();
+    Eigen::Affine3d T_frd_ned = Eigen::Affine3d::Identity();
+    T_frd_ned.linear() =
+        Eigen::AngleAxisd(yaw_frd_ned, Eigen::Vector3d::UnitZ())
+            .toRotationMatrix();
+    T_ned_flu = (T_frd_ned * T_flu_frd).inverse();
+    is_init_transformations = true;
+  }
+  return {T_ned_flu * sp.to_affine()};
+}
+
+Eigen::Affine3d create_affine_flu_to_ned(double yaw_frd_ned) {
+  Eigen::Affine3d T_flu_frd = Eigen::Affine3d::Identity();
+  T_flu_frd.linear() =
+      Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()).toRotationMatrix();
+  Eigen::Affine3d T_frd_ned = Eigen::Affine3d::Identity();
+  T_frd_ned.linear() = Eigen::AngleAxisd(yaw_frd_ned, Eigen::Vector3d::UnitZ())
+                           .toRotationMatrix();
+  return T_frd_ned * T_flu_frd;
 }
 };
