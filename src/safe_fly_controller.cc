@@ -120,6 +120,7 @@ private:
     acc_vec = std::min(max_acc_, acc_vec.norm()) * acc_dir;
     speed_vec = std::min(max_speed_, (cur_pose_.linear_vel + acc_vec).norm()) *
                 speed_dir;
+    acc_vec = speed_vec - cur_pose_.linear_vel;
 
     double vyaw = target_.yaw - cur_pose_.yaw;
     if (vyaw > M_PI) {
