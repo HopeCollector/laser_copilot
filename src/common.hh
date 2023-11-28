@@ -7,6 +7,14 @@ double quaternion_to_yaw(Eigen::Quaterniond q) {
   return std::atan2(vec[1], vec[0]);
 }
 
+struct velodyne_point_v1_t {
+  alignas(2) float x;
+  alignas(2) float y;
+  alignas(2) float z;
+  alignas(2) float intensity;
+  alignas(2) uint16_t ring;
+};
+
 struct pid_controller {
   double kp = 1.0;
   double ki = 0.0;

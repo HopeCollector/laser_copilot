@@ -1,15 +1,38 @@
-import sys
 import launch
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 
-def get_cfg_file():
+def get_param_declaretions():
     return [
-        PathJoinSubstitution([FindPackageShare("laser_copilot"), "launch", "obj_dist.yaml"])
+        DeclareLaunchArgument("z_max", default_value="0.25"),
+        DeclareLaunchArgument("z_min", default_value="-0.25"),
+        DeclareLaunchArgument("distance", default_value="0.2", description="degree/s"),
     ]
+
+
+def get_composable_node():
+    return ComposableNode(
+        package="laser_copilot",
+        plugin="laser_copilot::obj_dist",
+        name="objdist",
+        parameters=[
+            {
+                "z_max": LaunchConfiguration("z_max"),
+                "z_min": LaunchConfiguration("z_min"),
+                "distance": LaunchConfiguration("distance"),
+            }
+        ],
+        remappings=[
+            ("sub/lvx", "livox/lidar"),
+            ("sub/pc2", "/x500_lidar/point_cloud"),
+            ("out/laser_scan", "mavros/obstacle/send"),
+        ],
+    )
 
 
 def generate_launch_description():
@@ -19,19 +42,12 @@ def generate_launch_description():
         namespace="",
         package="rclcpp_components",
         executable="component_container",
-        composable_node_descriptions=[
-            ComposableNode(
-                package="laser_copilot",
-                plugin="laser_copilot::obj_dist",
-                name="objdist",
-                parameters=get_cfg_file(),
-                remappings=[
-                    ("sub/lvx", "livox/lidar"),
-                    ("out/laser_scan", "mavros/obstacle/send"),
-                ],
-            )
-        ],
+        composable_node_descriptions=[get_composable_node()],
         output="screen",
     )
 
-    return launch.LaunchDescription([container])
+    launch_list = []
+    launch_list += get_param_declaretions()
+    launch_list.append(container)
+
+    return launch.LaunchDescription(launch_list)
