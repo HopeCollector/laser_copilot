@@ -59,6 +59,7 @@ private:
     max_jerk_ = declare_parameter("max_jerk", 0.2);
     max_yaw_speed_ = declare_parameter("max_yaw_speed", 30.0) / 180.0 * M_PI;
     min_dist_ = declare_parameter("min_distance", 1.0);
+    obj_sensor_delay_ = declare_parameter("object_sensor_delay_ms", 50) * 1e-3;
   }
 
   void init_ctrl_msg() {
@@ -125,7 +126,7 @@ private:
     acc_vec = std::min(max_acc_, acc_vec.norm()) * acc_dir;
     speed_vec = std::min(max_speed_, (cur_pose_.linear_vel + acc_vec).norm()) *
                 speed_dir;
-    adjust_setpoint(speed_vec);
+    adjust_velocity_setpoint(speed_vec);
     acc_vec = speed_vec - cur_pose_.linear_vel;
 
     double vyaw = target_.yaw - cur_pose_.yaw;
@@ -167,27 +168,31 @@ private:
 
   void cb_objs(sensor_msgs::msg::LaserScan::ConstSharedPtr msg) {
     std::copy(msg->ranges.begin(), msg->ranges.end(), objs_map_.begin());
+    obj_max_dist_ = msg->range_max;
+    obj_min_dist_ = msg->range_min;
+    is_get_objs_msgs_ = true;
   }
 
-  void adjust_setpoint(Eigen::Vector3d &sp_direction) {
-    const double sp_idx_original = id(sp_direction.x(), sp_direction.y());
+  void adjust_velocity_setpoint(Eigen::Vector3d &setpoint) {
+    if (!is_get_objs_msgs_) return; // no sensor msg
+    if (obj_min_dist_ == obj_max_dist_) return; // no valid sensor msg
+    double speed = setpoint.norm();
+    setpoint.normalize();
+    adjust_move_direction(setpoint);
+    adjust_speed(setpoint, speed);
+  }
+
+  void adjust_move_direction(Eigen::Vector3d &direction) {
+    const double sp_idx_original = id(direction.x(), direction.y());
     double sp_idx_new = sp_idx_original;
     double best_cost = std::numeric_limits<double>::max();
     const int filter_size = 2;
     for (int i = sp_idx_original - SEARCH_RANGE;
          i <= sp_idx_original + SEARCH_RANGE; i++) {
-      double mean_dist = 0;
-      for (int j = i - filter_size; j <= i + filter_size; j++) {
-        int id = wrap_id(j);
-        if (objs_map_[id] == MAX_DIST) {
-          mean_dist += min_dist_;
-        } else {
-          mean_dist += objs_map_[id];
-        }
-      }
+      const double mean_dist = mean_distance(i, filter_size);
       const int id = wrap_id(i);
-      mean_dist = mean_dist / (2.f * filter_size + 1.f);
-      const double deviation_cost = min_dist_ * 0.5f * std::abs(i - sp_idx_original);
+      const double deviation_cost =
+          min_dist_ * 0.5f * std::abs(i - sp_idx_original);
       const double cost = deviation_cost - mean_dist - objs_map_[id];
       if (cost < best_cost && objs_map_[id] != MAX_DIST) {
         best_cost = cost;
@@ -196,9 +201,56 @@ private:
     }
     if (sp_idx_new != sp_idx_original) {
       double angle = sp_idx_new * RAD_INC;
-      sp_direction << std::cos(angle), std::sin(angle), 0;
-      sp_direction *= cur_pose_.linear_vel.norm();
+      direction << std::cos(angle), std::sin(angle), 0;
     }
+  }
+
+  void adjust_speed(Eigen::Vector3d &sp_direction, double sp_speed) {
+    Eigen::Vector3d direction;
+    const double min_distance_to_keep = std::max(obj_min_dist_, min_dist_);
+    for (int i = 0; i < GROUP_NUM; i++) {
+      if (objs_map_[i] >= MAX_DIST) continue;
+      if (objs_map_[i] < obj_max_dist_ || objs_map_[i] > obj_max_dist_) continue;
+      double angle = i * RAD_INC;
+      direction << std::cos(angle), std::sin(angle), 0.;
+      if (sp_direction.dot(direction) <= 0) continue;
+      const double cur_vel_parallel = std::max(0.0, cur_pose_.linear_vel.dot(direction));
+      const double delay_distance = obj_sensor_delay_ * cur_vel_parallel;
+      const double stop_distance =
+          std::max(0.0, objs_map_[i] - delay_distance - min_distance_to_keep);
+      const double vel_max_pid = vel_pid_(stop_distance);
+      const double vel_max_smooth = smooth_velocity_from_distance(stop_distance);
+      const double projection = direction.dot(sp_direction);
+      double vel_max_dir = sp_speed;
+      if (projection > 0.01) {
+        vel_max_dir = std::max(vel_max_pid, vel_max_smooth) / projection;
+      }
+      vel_max_dir = std::max(vel_max_dir, 0.);
+      sp_speed = std::min(sp_speed, vel_max_dir);
+    }
+    sp_direction *= sp_speed;
+  }
+
+  double mean_distance(int idx, int filter_size) {
+    double mean_dist = 0;
+    for (int j = idx - filter_size; j <= idx + filter_size; j++) {
+      int id = wrap_id(j);
+      if (objs_map_[id] == MAX_DIST) {
+        mean_dist += min_dist_;
+      } else {
+        mean_dist += objs_map_[id];
+      }
+    }
+    return mean_dist / (2.f * filter_size + 1.f);
+  }
+
+  // copy from px4 TrajMath.hpp L61
+  // https://github.com/PX4/PX4-Autopilot/blob/b8c541dd7277ed735139d7d1bfb829d61fbe29fb/src/lib/mathlib/math/TrajMath.hpp#L61
+  double smooth_velocity_from_distance(const double stop_distance) {
+    static const double b = 4.0 * max_acc_ * max_acc_ / max_jerk_;
+    double c = -2.0 * max_acc_ * stop_distance;
+    double max_speed = 0.5 * (-b + std::sqrt(b * b - 4.0 * c));
+    return std::max(max_speed, 0.);
   }
 
 private:
@@ -233,6 +285,10 @@ private:
   pid_controller vel_pid_;
   pid_controller yaw_pid_;
   std::array<double, 72> objs_map_;
+  bool is_get_objs_msgs_ = false;
+  double obj_max_dist_ = 0.0;
+  double obj_min_dist_ = MAX_DIST;
+  double obj_sensor_delay_;
 };
 }; // namespace laser_copilot
 
