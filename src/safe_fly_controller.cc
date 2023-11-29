@@ -7,6 +7,7 @@
 #include <px4_msgs/msg/vehicle_status.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
 namespace laser_copilot {
 using namespace std::chrono_literals;
 class safe_fly_controller : public rclcpp::Node {
@@ -24,11 +25,13 @@ private:
     sub_position_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
         "/fmu/out/vehicle_odometry", rclcpp::SensorDataQoS(),
         std::bind(&safe_fly_controller::cb_odometry, this, _1));
-    sub_status_ = create_subscription<px4_msgs::msg::VehicleStatus>(
-        "/fmu/out/vehicle_status", rclcpp::SensorDataQoS(),
-        std::bind(&safe_fly_controller::cb_status, this, _1));
+    // sub_status_ = create_subscription<px4_msgs::msg::VehicleStatus>(
+    //     "/fmu/out/vehicle_status", rclcpp::SensorDataQoS(),
+    //     std::bind(&safe_fly_controller::cb_status, this, _1));
     sub_goal_ = create_subscription<geometry_msgs::msg::PoseStamped>(
         "sub/goal", 5, std::bind(&safe_fly_controller::cb_goal, this, _1));
+    sub_objs_ = create_subscription<sensor_msgs::msg::LaserScan>(
+      "sub/objs", 5, std::bind(&safe_fly_controller::cb_objs, this, _1));
     pub_cmd_ = create_publisher<px4_msgs::msg::TrajectorySetpoint>(
         "/fmu/in/trajectory_setpoint", rclcpp::SensorDataQoS());
     pub_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
@@ -55,6 +58,7 @@ private:
     max_acc_ = declare_parameter("max_acc", 1.0);
     max_jerk_ = declare_parameter("max_jerk", 0.2);
     max_yaw_speed_ = declare_parameter("max_yaw_speed", 30.0) / 180.0 * M_PI;
+    min_dist_ = declare_parameter("min_distance", 1.0);
   }
 
   void init_ctrl_msg() {
@@ -92,10 +96,11 @@ private:
   }
 
   void cb_goal(geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
-    target_ = setpoint_t(
-        {msg->pose.position.x, msg->pose.position.y, msg->pose.position.z},
-        {msg->pose.orientation.w, msg->pose.orientation.x,
-         msg->pose.orientation.y, msg->pose.orientation.z});
+    target_ = setpoint_t({msg->pose.position.x, msg->pose.position.y,
+                          msg->pose.position.z < 0.2 ? cur_pose_.position.z()
+                                                     : msg->pose.position.z},
+                         {msg->pose.orientation.w, msg->pose.orientation.x,
+                          msg->pose.orientation.y, msg->pose.orientation.z});
     if(!timer_50hz_) {
       timer_50hz_ = this->create_wall_timer(
           20ms, std::bind(&safe_fly_controller::cb_50hz, this));
@@ -120,6 +125,7 @@ private:
     acc_vec = std::min(max_acc_, acc_vec.norm()) * acc_dir;
     speed_vec = std::min(max_speed_, (cur_pose_.linear_vel + acc_vec).norm()) *
                 speed_dir;
+    adjust_setpoint(speed_vec);
     acc_vec = speed_vec - cur_pose_.linear_vel;
 
     double vyaw = target_.yaw - cur_pose_.yaw;
@@ -159,12 +165,50 @@ private:
     pub_cmd_->publish(msg);
   }
 
+  void cb_objs(sensor_msgs::msg::LaserScan::ConstSharedPtr msg) {
+    std::copy(msg->ranges.begin(), msg->ranges.end(), objs_map_.begin());
+  }
+
+  void adjust_setpoint(Eigen::Vector3d &sp_direction) {
+    const double sp_idx_original = id(sp_direction.x(), sp_direction.y());
+    double sp_idx_new = sp_idx_original;
+    double best_cost = std::numeric_limits<double>::max();
+    const int filter_size = 2;
+    for (int i = sp_idx_original - SEARCH_RANGE;
+         i <= sp_idx_original + SEARCH_RANGE; i++) {
+      double mean_dist = 0;
+      for (int j = i - filter_size; j <= i + filter_size; j++) {
+        int id = wrap_id(j);
+        if (objs_map_[id] == MAX_DIST) {
+          mean_dist += min_dist_;
+        } else {
+          mean_dist += objs_map_[id];
+        }
+      }
+      const int id = wrap_id(i);
+      mean_dist = mean_dist / (2.f * filter_size + 1.f);
+      const double deviation_cost = min_dist_ * 0.5f * std::abs(i - sp_idx_original);
+      const double cost = deviation_cost - mean_dist - objs_map_[id];
+      if (cost < best_cost && objs_map_[id] != MAX_DIST) {
+        best_cost = cost;
+        sp_idx_new = id;
+      }
+    }
+    if (sp_idx_new != sp_idx_original) {
+      double angle = sp_idx_new * RAD_INC;
+      sp_direction << std::cos(angle), std::sin(angle), 0;
+      sp_direction *= cur_pose_.linear_vel.norm();
+    }
+  }
+
 private:
   rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr
       sub_position_ = nullptr;
   rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr sub_status_ =
       nullptr;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal_ =
+      nullptr;
+  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_objs_ =
       nullptr;
   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_cmd_ =
       nullptr;
@@ -182,11 +226,13 @@ private:
   double max_acc_;
   double max_jerk_;
   double max_yaw_speed_;
+  double min_dist_;
   pose_t cur_pose_;
   pose_t prv_pose_;
   setpoint_t target_;
   pid_controller vel_pid_;
   pid_controller yaw_pid_;
+  std::array<double, 72> objs_map_;
 };
 }; // namespace laser_copilot
 

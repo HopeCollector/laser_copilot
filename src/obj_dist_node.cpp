@@ -9,20 +9,6 @@
 #include <pcl/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 namespace laser_copilot {
-
-constexpr double RAD_TO_DEG = 180.0 / M_PI;
-constexpr double DEG_TO_RAD = M_PI / 180.0;
-constexpr int GROUP_NUM = 72;
-constexpr float RAD_INC = 2 * M_PI / GROUP_NUM;
-constexpr float MAX_DIST = 40.0f;
-
-inline int id(double x, double y, double offset = 0.0) {
-  return static_cast<int>(((atan2(y, x) + offset) * RAD_TO_DEG + (y < 0 ? 360.0 : 0.0)) /
-                          5) % GROUP_NUM;
-}
-
-inline float dist(double x, double y) { return std::sqrt(x * x + y * y); }
-
 class obj_dist : public rclcpp::Node {
 public:
   using point_t = pcl::PointXYZ;
@@ -48,7 +34,7 @@ private:
   void init_callback() {
     using namespace std::placeholders;
     pub_ls_ = create_publisher<sensor_msgs::msg::LaserScan>(
-        "out/laser_scan", rclcpp::SensorDataQoS());
+        "out/laser_scan", 5);
     sub_lvx_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
         "sub/lvx", rclcpp::SensorDataQoS(),
         std::bind(&obj_dist::cb_lvx, this, _1));

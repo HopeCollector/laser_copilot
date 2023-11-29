@@ -2,7 +2,29 @@
 #include <Eigen/Eigen>
 
 namespace laser_copilot {
-double quaternion_to_yaw(Eigen::Quaterniond q) {
+constexpr double RAD_TO_DEG = 180.0 / M_PI;
+constexpr double DEG_TO_RAD = M_PI / 180.0;
+constexpr int GROUP_NUM = 72;
+constexpr int SEARCH_RANGE = 6; // search 30° on each side
+constexpr float RAD_INC = 2 * M_PI / GROUP_NUM;
+constexpr float MAX_DIST = std::numeric_limits<std::uint16_t>::max();
+
+inline int id(double x, double y) {
+  return static_cast<int>((atan2(y, x) * RAD_TO_DEG + (y < 0 ? 360.0 : 0.0)) /
+                          5) % GROUP_NUM;
+}
+
+inline int wrap_id(int id) {
+  id = id % GROUP_NUM;
+  while (id < 0) {
+    id += GROUP_NUM;
+  }
+  return id;
+}
+
+inline float dist(double x, double y) { return std::sqrt(x * x + y * y); }
+
+inline double quaternion_to_yaw(Eigen::Quaterniond q) {
   Eigen::Vector3d vec = q * Eigen::Vector3d::UnitX();
   return std::atan2(vec[1], vec[0]);
 }
