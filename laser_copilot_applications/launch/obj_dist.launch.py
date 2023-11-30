@@ -1,5 +1,5 @@
 import launch
-from launch_ros.actions import ComposableNodeContainer
+from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
@@ -32,22 +32,18 @@ def get_composable_node():
             ("sub/pc2", "/x500_lidar/point_cloud"),
             ("out/laser_scan", "laser_scan/objs"),
         ],
+        extra_arguments=[{"use_intra_process_comms": True}],
     )
 
 
 def generate_launch_description():
     """Generate launch description with multiple components."""
-    container = ComposableNodeContainer(
-        name="laser_copilot_container",
-        namespace="",
-        package="rclcpp_components",
-        executable="component_container",
-        composable_node_descriptions=[get_composable_node()],
-        output="screen",
+    return launch.LaunchDescription(
+        get_param_declaretions()
+        + [
+            LoadComposableNodes(
+                target_container="laser_copilot/container",
+                composable_node_descriptions=[get_composable_node()],
+            )
+        ]
     )
-
-    launch_list = []
-    launch_list += get_param_declaretions()
-    launch_list.append(container)
-
-    return launch.LaunchDescription(launch_list)
