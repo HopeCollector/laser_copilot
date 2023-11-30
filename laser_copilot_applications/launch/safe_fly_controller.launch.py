@@ -25,7 +25,6 @@ def get_composable_node():
         name="controller",
         parameters=[
             {
-                "use_sim_time": True,
                 "max_acc": LaunchConfiguration("max_acc"),
                 "max_speed": LaunchConfiguration("max_speed"),
                 "max_yaw_speed": LaunchConfiguration("max_yaw_speed"),

@@ -21,7 +21,6 @@ def get_composable_node():
         name="replayer",
         parameters=[
             {
-                "use_sim_time": True,
                 "topic": "/fmu/out/vehicle_odometry",
                 "file_path": LaunchConfiguration("file_path"),
             }
