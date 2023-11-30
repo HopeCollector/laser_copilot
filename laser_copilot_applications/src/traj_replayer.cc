@@ -8,7 +8,7 @@
 #include <rosbag2_cpp/reader.hpp>
 #include <queue>
 #include <tf2_ros/static_transform_broadcaster.h>
-namespace laser_copilot {
+namespace laser_copilot_applications {
 class traj_replayer : public rclcpp::Node {
 public:
   explicit traj_replayer(const rclcpp::NodeOptions &options)
@@ -160,8 +160,8 @@ private:
   Eigen::Affine3d T_localflu_localfrd_ = Eigen::Affine3d::Identity();
   Eigen::Affine3d T_localfrd_localflu_ = Eigen::Affine3d::Identity();
 };
-}; // namespace laser_copilot
+}; // namespace laser_copilot_applications
 
 #include <rclcpp_components/register_node_macro.hpp>
 
-RCLCPP_COMPONENTS_REGISTER_NODE(laser_copilot::traj_replayer)
+RCLCPP_COMPONENTS_REGISTER_NODE(laser_copilot_applications::traj_replayer)

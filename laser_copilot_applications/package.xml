@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>laser_copilot</name>
+  <name>laser_copilot_applications</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="cmw4187@126.com">lawskiy</maintainer>

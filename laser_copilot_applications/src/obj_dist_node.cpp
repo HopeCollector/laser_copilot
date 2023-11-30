@@ -8,7 +8,7 @@
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
-namespace laser_copilot {
+namespace laser_copilot_applications {
 class obj_dist : public rclcpp::Node {
 public:
   using point_t = pcl::PointXYZ;
@@ -143,8 +143,8 @@ private:
   double z_max_, z_min_;
   double distance_;
 };
-}; // namespace laser_copilot
+}; // namespace laser_copilot_applications_applications
 
 #include <rclcpp_components/register_node_macro.hpp>
 
-RCLCPP_COMPONENTS_REGISTER_NODE(laser_copilot::obj_dist)
+RCLCPP_COMPONENTS_REGISTER_NODE(laser_copilot_applications::obj_dist)

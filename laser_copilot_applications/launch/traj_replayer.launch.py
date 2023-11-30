@@ -16,8 +16,8 @@ def get_param_declaretions():
 
 def get_composable_node():
     return ComposableNode(
-        package="laser_copilot",
-        plugin="laser_copilot::traj_replayer",
+        package="laser_copilot_applications",
+        plugin="laser_copilot_applications::traj_replayer",
         name="replayer",
         parameters=[
             {

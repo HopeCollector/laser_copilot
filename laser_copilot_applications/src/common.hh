@@ -1,7 +1,7 @@
 #pragma once
 #include <Eigen/Eigen>
 
-namespace laser_copilot {
+namespace laser_copilot_applications {
 constexpr double RAD_TO_DEG = 180.0 / M_PI;
 constexpr double DEG_TO_RAD = M_PI / 180.0;
 constexpr int GROUP_NUM = 72;

@@ -8,7 +8,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
-namespace laser_copilot {
+namespace laser_copilot_applications {
 using namespace std::chrono_literals;
 class safe_fly_controller : public rclcpp::Node {
 public:
@@ -290,8 +290,8 @@ private:
   double obj_min_dist_ = MAX_DIST;
   double obj_sensor_delay_;
 };
-}; // namespace laser_copilot
+}; // namespace laser_copilot_applications
 
 #include <rclcpp_components/register_node_macro.hpp>
 
-RCLCPP_COMPONENTS_REGISTER_NODE(laser_copilot::safe_fly_controller)
+RCLCPP_COMPONENTS_REGISTER_NODE(laser_copilot_applications::safe_fly_controller)

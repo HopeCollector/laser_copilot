@@ -1,4 +1,3 @@
-import sys
 import launch
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
@@ -10,29 +9,29 @@ from launch.substitutions import LaunchConfiguration
 
 def get_param_declaretions():
     return [
-        DeclareLaunchArgument("max_acc", default_value="0.5"),
-        DeclareLaunchArgument("max_speed", default_value="2.0"),
-        DeclareLaunchArgument(
-            "max_yaw_speed", default_value="30.0", description="degree/s"
-        ),
+        DeclareLaunchArgument("z_max", default_value="0.25"),
+        DeclareLaunchArgument("z_min", default_value="-0.25"),
+        DeclareLaunchArgument("distance", default_value="0.2", description="degree/s"),
     ]
 
 
 def get_composable_node():
     return ComposableNode(
-        package="laser_copilot",
-        plugin="laser_copilot::safe_fly_controller",
-        name="controller",
+        package="laser_copilot_applications",
+        plugin="laser_copilot_applications::obj_dist",
+        name="objdist",
         parameters=[
             {
-                "use_sim_time": True,
-                "max_acc": LaunchConfiguration("max_acc"),
-                "max_speed": LaunchConfiguration("max_speed"),
-                "max_yaw_speed": LaunchConfiguration("max_yaw_speed"),
+                "z_max": LaunchConfiguration("z_max"),
+                "z_min": LaunchConfiguration("z_min"),
+                "distance": LaunchConfiguration("distance"),
             }
         ],
-        remappings=[("/sub/goal", "/move_base_simple/goal"),
-                    ("sub/objs", "laser_scan/objs")],
+        remappings=[
+            ("sub/lvx", "livox/lidar"),
+            ("sub/pc2", "/x500_lidar/point_cloud"),
+            ("out/laser_scan", "laser_scan/objs"),
+        ],
     )
 
 
