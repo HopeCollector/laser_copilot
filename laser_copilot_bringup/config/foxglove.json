@@ -1,0 +1,422 @@
+{
+  "configById": {
+    "Plot!1f16jzy": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/pub/debug.data[7]",
+          "enabled": true
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": false,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "followingViewWidth": 20,
+      "foxglovePanelTitle": "vehicle yaw"
+    },
+    "Plot!4kc5qa9": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/pub/debug.data[6]",
+          "enabled": true
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": false,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "followingViewWidth": 20,
+      "foxglovePanelTitle": "vehicle speed"
+    },
+    "Publish!uj43hj": {
+      "buttonText": "GO!",
+      "buttonTooltip": "",
+      "advancedView": true,
+      "value": "{\n  \"header\": {\n    \"stamp\": {\n      \"sec\": 0,\n      \"nsec\": 0\n    },\n    \"frame_id\": \"odom\"\n  },\n  \"pose\": {\n    \"position\": {\n      \"x\": 0,\n      \"y\": 0,\n      \"z\": 2\n    },\n    \"orientation\": {\n      \"x\": 0,\n      \"y\": 0,\n      \"z\": 0,\n      \"w\": 1\n    }\n  }\n}",
+      "datatype": "geometry_msgs/msg/PoseStamped",
+      "topicName": "/move_base_simple/goal"
+    },
+    "Plot!4exnw6k": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/pub/debug.data[0]",
+          "enabled": true
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "vehicle x",
+      "followingViewWidth": 20
+    },
+    "Plot!dy0ejj": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/pub/debug.data[1]",
+          "enabled": true
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": false,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "vehicle y",
+      "followingViewWidth": 20
+    },
+    "Plot!hp8uf0": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/pub/debug.data[2]",
+          "enabled": true
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "vehicle z",
+      "followingViewWidth": 20
+    },
+    "3D!q689ho": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 45.44146361561341,
+        "phi": 69.29743370882285,
+        "thetaOffset": 78.65634566295523,
+        "targetOffset": [
+          5.386190662848722,
+          -1.495026057982653,
+          -3.4547002943254484e-15
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-position",
+      "scene": {
+        "transforms": {
+          "showLabel": true,
+          "editable": true
+        },
+        "backgroundColor": "#545252",
+        "enableStats": true,
+        "ignoreColladaUpAxis": true
+      },
+      "transforms": {
+        "frame:x500_lidar/lidar_3d_v1": {
+          "visible": false
+        },
+        "frame:x500_lidar/lidar_3d_v1/link": {
+          "visible": false
+        },
+        "frame:x500_lidar/lidar_3d_v1/link/gpu_lidar": {
+          "visible": false
+        },
+        "frame:x500_lidar/rotor_3": {
+          "visible": false
+        },
+        "frame:x500_lidar/rotor_2": {
+          "visible": false
+        },
+        "frame:x500_lidar/rotor_1": {
+          "visible": false
+        },
+        "frame:x500_lidar/rotor_0": {
+          "visible": false
+        },
+        "frame:x500_lidar/base_link": {
+          "visible": false
+        },
+        "frame:x500_lidar/link/gpu_lidar": {
+          "visible": false
+        },
+        "frame:x500_lidar/link": {
+          "visible": false
+        },
+        "frame:base_link": {
+          "visible": false
+        },
+        "frame:lidar_link": {
+          "visible": false
+        }
+      },
+      "topics": {
+        "/x500_lidar/point_cloud": {
+          "visible": true,
+          "colorField": "z",
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "pointSize": 3,
+          "explicitAlpha": 0.3,
+          "decayTime": 10,
+          "minValue": -1,
+          "maxValue": 5
+        },
+        "/pub/drone": {
+          "visible": true,
+          "color": "#ff0000ff"
+        },
+        "/pub/world": {
+          "visible": true,
+          "showOutlines": false,
+          "color": "#5d705aff"
+        },
+        "/move_base_simple/goal": {
+          "visible": true,
+          "axisScale": 2.2,
+          "type": "axis"
+        },
+        "/initialpose": {
+          "visible": true
+        },
+        "/replayer/pub/path": {
+          "visible": true,
+          "gradient": [
+            "#a7ff00ff",
+            "#c7ff6b80"
+          ],
+          "lineWidth": 0.06
+        },
+        "/mavros/obstacle/send": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "flat",
+          "colorMap": "turbo",
+          "flatColor": "#ff0000ff",
+          "pointSize": 19
+        },
+        "/laser_scan/objs": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "flat",
+          "colorMap": "turbo",
+          "pointSize": 16,
+          "flatColor": "#ff0000ff"
+        }
+      },
+      "layers": {
+        "b253ceaf-6a48-4259-ab18-e78b3bca2f6f": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Grid",
+          "instanceId": "b253ceaf-6a48-4259-ab18-e78b3bca2f6f",
+          "layerId": "foxglove.Grid",
+          "frameId": "odom",
+          "size": 10,
+          "divisions": 10,
+          "lineWidth": 1,
+          "color": "#248eff",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "order": 1
+        }
+      },
+      "publish": {
+        "type": "pose",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "followTf": "odom"
+    },
+    "Parameters!noo40g": {
+      "title": "Parameters"
+    },
+    "Plot!g3321z": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/pub/debug.data[5]",
+          "enabled": true
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": false,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "followingViewWidth": 20,
+      "foxglovePanelTitle": "cmd yaw"
+    },
+    "Plot!4acxhgd": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/pub/debug.data[3]",
+          "enabled": true
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": false,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "followingViewWidth": 20,
+      "foxglovePanelTitle": "cmd speed"
+    },
+    "Plot!2dh63ty": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/pub/debug.data[4]",
+          "enabled": true,
+          "label": "cur_acc"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": false,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "followingViewWidth": 20,
+      "foxglovePanelTitle": "cmd acc"
+    },
+    "RawMessages!px2918": {
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "topicPath": "/mavros/obstacle/send.ranges[:]"
+    },
+    "Tab!2d3xmb": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "1",
+          "layout": {
+            "first": {
+              "first": {
+                "first": "Plot!1f16jzy",
+                "second": "Plot!4kc5qa9",
+                "direction": "column",
+                "splitPercentage": 49.81203007518798
+              },
+              "second": "Publish!uj43hj",
+              "direction": "column",
+              "splitPercentage": 51.84466019417475
+            },
+            "second": {
+              "first": {
+                "first": {
+                  "first": "Plot!4exnw6k",
+                  "second": {
+                    "first": "Plot!dy0ejj",
+                    "second": "Plot!hp8uf0",
+                    "direction": "column",
+                    "splitPercentage": 49.85163204747773
+                  },
+                  "direction": "column",
+                  "splitPercentage": 34.56310679611651
+                },
+                "second": {
+                  "first": "3D!q689ho",
+                  "second": "Parameters!noo40g",
+                  "direction": "column",
+                  "splitPercentage": 67.37864077669903
+                },
+                "direction": "row",
+                "splitPercentage": 30.1905641730761
+              },
+              "second": {
+                "first": "Plot!g3321z",
+                "second": {
+                  "first": "Plot!4acxhgd",
+                  "second": "Plot!2dh63ty",
+                  "direction": "column",
+                  "splitPercentage": 52.42966751918158
+                },
+                "direction": "column",
+                "splitPercentage": 30
+              },
+              "direction": "row",
+              "splitPercentage": 74.92555092316854
+            },
+            "direction": "row",
+            "splitPercentage": 16.89453125
+          }
+        },
+        {
+          "title": "3",
+          "layout": "RawMessages!px2918"
+        }
+      ]
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {
+    "d67cbce5-badd-415e-bfaa-4423be8eb262": {
+      "sourceCode": "import { Input, Message } from \"./types\";\n\ntype Output = { norm: number };\n\nexport const inputs = [\"/fmu/out/vehicle_odometry\"];\nexport const output = \"/foxglove/x500_lidar/linear_vel/norm\";\n\nexport default function script(\n  event: Input<\"/fmu/out/vehicle_odometry\">,\n): Output {\n  return {\n    norm: Math.sqrt(\n      event.message.velocity[0] * event.message.velocity[0] +\n        event.message.velocity[1] * event.message.velocity[1] +\n        event.message.velocity[2] * event.message.velocity[2],\n    ),\n  };\n}\n",
+      "name": "linear_vel"
+    },
+    "895bee4a-a48e-4256-a765-5852ee3e72c3": {
+      "sourceCode": "import { Input, Message } from \"./types\";\n\ntype Output = { norm: number };\n\nexport const inputs = [\"/fmu/in/trajectory_setpoint\"];\nexport const output = \"/foxglove/x500_lidar/linear_vel_setpoint/norm\";\n\nexport default function script(\n  event: Input<\"/fmu/in/trajectory_setpoint\">,\n): Output {\n  return {\n    norm: Math.sqrt(\n      event.message.velocity[0] * event.message.velocity[0] +\n        event.message.velocity[1] * event.message.velocity[1] +\n        event.message.velocity[2] * event.message.velocity[2],\n    ),\n  };\n}\n",
+      "name": "linear_vel_setpoint"
+    },
+    "98672d4d-c8ea-45ae-a6fb-95b291839287": {
+      "sourceCode": "import { Input, Message } from \"./types\";\nimport { Quaternion, Euler, quaternionToEuler } from \"./quaternions\";\n\ntype Output = Euler;\n\nexport const inputs = [\"/pub/debug/odometry\"];\nexport const output = \"/foxglove/x500_lidar/euler\";\n\nexport default function script(event: Input<\"/pub/debug/odometry\">): Output {\n  return quaternionToEuler({\n    w: event.message.pose.orientation.w,\n    x: event.message.pose.orientation.x,\n    y: event.message.pose.orientation.y,\n    z: event.message.pose.orientation.z,\n  });\n}\n",
+      "name": "vehicle_orientation_euler"
+    }
+  },
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": "Tab!2d3xmb"
+}
