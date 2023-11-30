@@ -37,7 +37,7 @@ private:
     pub_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
         "/fmu/in/offboard_control_mode", rclcpp::SensorDataQoS());
     pub_dbg_ = create_publisher<std_msgs::msg::Float64MultiArray>(
-        "/pub/debug", 5);
+        "pub/debug", 5);
     timer_once_1s_ = create_wall_timer(1s, [this](){
       this->timer_once_1s_->cancel();
       this->T_odomflu_odomned_.linear() = Eigen::Matrix3d(
@@ -149,6 +149,9 @@ private:
     dbg_msg.data.push_back(vyaw); // 5
     dbg_msg.data.push_back(cur_pose_.linear_vel.norm()); // 6
     dbg_msg.data.push_back(cur_pose_.yaw / M_PI * 180.0); // 7
+    dbg_msg.data.push_back(speed_vec[0]);
+    dbg_msg.data.push_back(speed_vec[1]);
+    dbg_msg.data.push_back(speed_vec[2]);
     pub_dbg_->publish(dbg_msg);
   }
 

@@ -20,6 +20,7 @@ def get_composable_node():
         remappings=[
             ("sub/goal", "/move_base_simple/goal"),
             ("sub/objs", "laser_scan/objs"),
+            ("pub/debug", "controller/debug"),
         ],
         extra_arguments=[{"use_intra_process_comms": True}],
     )

@@ -9,7 +9,14 @@ def get_composable_node():
         plugin="laser_copilot_applications::visualization_helper",
         name="visualization_helper",
         parameters=[{}],
-        remappings=[],
+        remappings=[
+            ("sub/debug", "controller/debug"),
+            ("sub/gui_setpoint", "/foxglove/gui_setpoint"),
+            ("pub/path_stright", "helper/path/stright"),
+            ("pub/path_real", "helper/path/real"),
+            ("pub/setpoint", "/move_base_simple/goal"),
+            ("pub/velocity", "helper/velocity"),
+        ],
         extra_arguments=[{"use_intra_process_comms": True}],
     )
 
