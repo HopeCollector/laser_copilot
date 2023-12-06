@@ -18,6 +18,7 @@ def get_composable_node():
             }
         ],
         remappings=[
+            ("sub/px4_odom", "/px4_gz/odom"),
             ("sub/goal", "/move_base_simple/goal"),
             ("sub/objs", "laser_scan/objs"),
             ("pub/debug", "controller/debug"),
