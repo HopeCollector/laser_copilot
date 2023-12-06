@@ -102,6 +102,7 @@ private:
       range_max = std::max(range, range_max);
       range_min = std::min(range, range_min);
     }
+    std::iota(ls.intensities.begin(), ls.intensities.end(), 0);
     pub_ls_->publish(ls);
   }
 
@@ -115,6 +116,7 @@ private:
     msg.range_min = MAX_DIST;
     msg.range_max = 0.0f;
     msg.ranges.resize(GROUP_NUM);
+    msg.intensities.resize(GROUP_NUM);
     std::fill(msg.ranges.begin(), msg.ranges.end(), MAX_DIST);
     return msg;
   }
