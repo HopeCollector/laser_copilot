@@ -5,14 +5,9 @@ namespace laser_copilot_applications {
 constexpr double RAD_TO_DEG = 180.0 / M_PI;
 constexpr double DEG_TO_RAD = M_PI / 180.0;
 constexpr int GROUP_NUM = 72;
-constexpr int SEARCH_RANGE = 6; // search 30° on each side
+constexpr int GROUP_NUM_HALF = GROUP_NUM / 2;
 constexpr float RAD_INC = 2 * M_PI / GROUP_NUM;
 constexpr float MAX_DIST = std::numeric_limits<std::uint16_t>::max();
-
-inline int id(double x, double y) {
-  return static_cast<int>((atan2(y, x) * RAD_TO_DEG + (y < 0 ? 360.0 : 0.0)) /
-                          5) % GROUP_NUM;
-}
 
 inline int wrap_id(int id) {
   id = id % GROUP_NUM;
@@ -21,6 +16,19 @@ inline int wrap_id(int id) {
   }
   return id;
 }
+
+// wrap degree to [0, 360)
+inline double wrap_360(double degree) {
+  degree = std::fmod(degree, 360.0);
+  if (degree < 0) {
+    degree += 360.0;
+  }
+  return degree;
+}
+
+inline int id(double yaw) { return wrap_id(int(yaw / RAD_INC) % GROUP_NUM); }
+
+inline int id(double x, double y) { return id(std::atan2(y, x)); }
 
 inline float dist(double x, double y) { return std::sqrt(x * x + y * y); }
 
