@@ -11,7 +11,7 @@ def get_param_declaretions():
     return [
         DeclareLaunchArgument("z_max", default_value="0.25"),
         DeclareLaunchArgument("z_min", default_value="-0.25"),
-        DeclareLaunchArgument("distance", default_value="0.2", description="degree/s"),
+        DeclareLaunchArgument("cut_distance", default_value="0.2"),
     ]
 
 
@@ -24,7 +24,7 @@ def get_composable_node():
             {
                 "z_max": LaunchConfiguration("z_max"),
                 "z_min": LaunchConfiguration("z_min"),
-                "distance": LaunchConfiguration("distance"),
+                "distance": LaunchConfiguration("cut_distance"),
             }
         ],
         remappings=[
