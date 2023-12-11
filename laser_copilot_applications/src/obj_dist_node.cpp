@@ -1,51 +1,48 @@
 #include <rclcpp/rclcpp.hpp>
 #include "livox_ros_driver2/msg/custom_msg.hpp"
+#include "common.hh"
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <cmath>
-namespace laser_copilot {
-
-constexpr double RAD_TO_DEG = 180.0 / M_PI;
-constexpr double DEG_TO_RAD = M_PI / 180.0;
-constexpr int GROUP_NUM = 72;
-constexpr float RAD_INC = 2 * M_PI / GROUP_NUM;
-constexpr float MAX_DIST = 1000.0f;
-
-inline int id(double x, double y) {
-  return static_cast<int>((atan2(y, x) * RAD_TO_DEG + (y < 0 ? 360.0 : 0.0)) /
-                          5) % GROUP_NUM;
-}
-
-inline float dist(double x, double y) { return std::sqrt(x * x + y * y); }
-
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
+namespace laser_copilot_applications {
 class obj_dist : public rclcpp::Node {
 public:
+  using point_t = pcl::PointXYZ;
+  using cloud_t = pcl::PointCloud<point_t>;
+  using objs_t = std::array<double, GROUP_NUM>;
+  using cloud_ptr_t = std::shared_ptr<cloud_t>;
+  using objs_ptr_t = std::shared_ptr<objs_t>;
+
   explicit obj_dist(const rclcpp::NodeOptions &options)
       : Node("obj_dist_node", options) {
-    decl_param();
     load_param();
-    pub_ls_ = create_publisher<sensor_msgs::msg::LaserScan>(
-        "out/laser_scan", rclcpp::SensorDataQoS());
-    sub_lvx_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
-        "sub/lvx", rclcpp::SensorDataQoS(),
-        [this](livox_ros_driver2::msg::CustomMsg::ConstSharedPtr msg) {
-          this->lvx_cb(msg);
-        });
+    init_callback();
   }
 
 private:
-  void decl_param() {
-    declare_parameter("z_max", 0.5);
-    declare_parameter("z_min", -0.5);
-    declare_parameter("distance", 0.2);
-  }
 
   void load_param() {
-    get_parameter("z_max", z_max_);
-    get_parameter("z_min", z_min_);
-    get_parameter("distance", distance_);
+    z_max_ = declare_parameter("z_max", 0.5);
+    z_min_ = declare_parameter("z_min", -0.5);
+    distance_ = declare_parameter("distance", 0.2);
   }
 
-  void lvx_cb(livox_ros_driver2::msg::CustomMsg::ConstSharedPtr msg) {
+  void init_callback() {
+    using namespace std::placeholders;
+    pub_ls_ = create_publisher<sensor_msgs::msg::LaserScan>(
+        "out/laser_scan", 5);
+    sub_lvx_ = create_subscription<livox_ros_driver2::msg::CustomMsg>(
+        "sub/lvx", rclcpp::SensorDataQoS(),
+        std::bind(&obj_dist::cb_lvx, this, _1));
+    sub_pc2_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+        "sub/pc2", 5, std::bind(&obj_dist::cb_pc2, this, _1));
+  }
+
+  void cb_lvx(livox_ros_driver2::msg::CustomMsg::ConstSharedPtr msg) {
     static sensor_msgs::msg::LaserScan prv_ls;
     sensor_msgs::msg::LaserScan ls = new_laser_scan_msg(msg->header);
     ls.scan_time = msg->points.back().offset_time / 1e9f;
@@ -87,16 +84,39 @@ private:
     pub_ls_->publish(ls);
   }
 
+  void cb_pc2(sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
+    sensor_msgs::msg::LaserScan ls = new_laser_scan_msg(msg->header);
+    sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
+    sensor_msgs::PointCloud2ConstIterator<float> iter_y(*msg, "y");
+    sensor_msgs::PointCloud2ConstIterator<float> iter_z(*msg, "z");
+    size_t point_num = msg->height * msg->width;
+    auto &range_min = ls.range_min;
+    auto &range_max = ls.range_max;
+    auto &ranges = ls.ranges;
+    for (int i = 0; i < point_num; ++i, ++iter_x, ++iter_y, ++iter_z) {
+      point_t  p {*iter_x, *iter_y, *iter_z};
+      if (std::isinf(p.x) || std::isinf(p.y) || std::isinf(p.z)) continue;
+      if (!is_in_detect_range(p)) continue;
+      auto &range = ranges[id(p.x, p.y)];
+      range = std::min(range, dist(p.x, p.y));
+      range_max = std::max(range, range_max);
+      range_min = std::min(range, range_min);
+    }
+    std::iota(ls.intensities.begin(), ls.intensities.end(), 0);
+    pub_ls_->publish(ls);
+  }
+
   sensor_msgs::msg::LaserScan new_laser_scan_msg(const std_msgs::msg::Header &header) {
     sensor_msgs::msg::LaserScan msg;
     msg.header = header;
-    msg.header.frame_id = "base_link";
+    msg.header.frame_id = "lidar_link";
     msg.angle_increment = RAD_INC;
     msg.angle_min = 0;
     msg.angle_max = 2 * M_PI;
     msg.range_min = MAX_DIST;
     msg.range_max = 0.0f;
     msg.ranges.resize(GROUP_NUM);
+    msg.intensities.resize(GROUP_NUM);
     std::fill(msg.ranges.begin(), msg.ranges.end(), MAX_DIST);
     return msg;
   }
@@ -118,13 +138,15 @@ private:
     dst.range_max = src.range_max;
   }
 
+private:
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr sub_lvx_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_pc2_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr pub_ls_;
   double z_max_, z_min_;
   double distance_;
 };
-}; // namespace laser_copilot
+}; // namespace laser_copilot_applications_applications
 
 #include <rclcpp_components/register_node_macro.hpp>
 
-RCLCPP_COMPONENTS_REGISTER_NODE(laser_copilot::obj_dist)
+RCLCPP_COMPONENTS_REGISTER_NODE(laser_copilot_applications::obj_dist)

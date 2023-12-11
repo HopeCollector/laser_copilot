@@ -1,17 +1,38 @@
 cmake_minimum_required(VERSION 3.8)
-project(laser_copilot)
+project(laser_copilot_applications)
 
 add_compile_options( -std=c++2a -O3)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # find dependencies
 find_package (ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies ()
 
+find_package(Eigen3 REQUIRED)
+find_package(PCL REQUIRED)
+
 ament_auto_add_library(obj_dist_component SHARED src/obj_dist_node.cpp)
+target_link_libraries(obj_dist_component ${PCL_LIBRARIES})
 rclcpp_components_register_nodes(obj_dist_component 
-  "laser_copilot::obj_dist"
+  "laser_copilot_applications::obj_dist"
 )
 
+ament_auto_add_library(safe_fly_controller_component SHARED src/safe_fly_controller.cc)
+target_link_libraries(safe_fly_controller_component Eigen3::Eigen)
+rclcpp_components_register_nodes(safe_fly_controller_component
+  "laser_copilot_applications::safe_fly_controller"
+)
+
+ament_auto_add_library(traj_replayer_component SHARED src/traj_replayer.cc)
+target_link_libraries(traj_replayer_component Eigen3::Eigen)
+rclcpp_components_register_nodes(traj_replayer_component
+  "laser_copilot_applications::traj_replayer"
+)
+
+ament_auto_add_library(visualization_helper_component SHARED src/visualization_helper.cc)
+rclcpp_components_register_nodes(visualization_helper_component
+  "laser_copilot_applications::visualization_helper"
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
