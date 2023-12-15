@@ -19,12 +19,12 @@ def get_composable_node():
             }
         ],
         remappings=[
-            ("sub/px4_odom", "/px4_gz/odom"),
+            ("sub/px4_odom", "/fmu/out/vehicle_odometry"),
             ("sub/goal", "/move_base_simple/goal"),
             ("sub/objs", "laser_scan/objs"),
             ("pub/debug", "controller/debug"),
         ],
-        extra_arguments=[{"use_intra_process_comms": True}],
+        # extra_arguments=[{"use_intra_process_comms": True}],
     )
 
 

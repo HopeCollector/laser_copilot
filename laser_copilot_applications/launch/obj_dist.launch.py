@@ -32,7 +32,7 @@ def get_composable_node():
             ("sub/pc2", "/x500_lidar/point_cloud"),
             ("out/laser_scan", "laser_scan/objs"),
         ],
-        extra_arguments=[{"use_intra_process_comms": True}],
+        # extra_arguments=[{"use_intra_process_comms": True}],
     )
 
 

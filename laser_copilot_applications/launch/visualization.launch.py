@@ -8,7 +8,10 @@ def get_composable_node():
         package="laser_copilot_applications",
         plugin="laser_copilot_applications::visualization_helper",
         name="visualization_helper",
-        parameters=[{}],
+        parameters=[{
+            "odom_frame_id": "odom",
+            "drone_frame_id": "base_link",
+        }],
         remappings=[
             ("sub/debug", "controller/debug"),
             ("sub/gui_setpoint", "/foxglove/gui_setpoint"),
@@ -17,7 +20,7 @@ def get_composable_node():
             ("pub/setpoint", "/move_base_simple/goal"),
             ("pub/velocity", "helper/velocity"),
         ],
-        extra_arguments=[{"use_intra_process_comms": True}],
+        # extra_arguments=[{"use_intra_process_comms": True}],
     )
 
 
