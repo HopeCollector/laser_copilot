@@ -53,7 +53,9 @@ private:
       this->T_odomned_odomflu_ = this->T_odomflu_odomned_.inverse();
       this->T_localflu_localfrd_.linear() =
           Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()).toRotationMatrix();
-      this->T_localfrd_localflu_ = this->T_localflu_localfrd_.inverse();
+      this->T_localfrd_localflu_ = this->T_localflu_localfrd_;
+      this->T_odomflu_odomfrd_ = this->T_localflu_localfrd_;
+      this->T_odomfrd_odomflu_ = this->T_odomflu_odomfrd_;
       RCLCPP_INFO_STREAM(get_logger(),
                          "detect init yaw(degree) in odom_ned frame: "
                              << this->cur_pose_.yaw / M_PI * 180.0);
@@ -80,21 +82,71 @@ private:
 
   void cb_px4_odometry(px4_msgs::msg::VehicleOdometry::ConstSharedPtr msg) {
     prv_pose_ = cur_pose_;
-    Eigen::Affine3d T_localfrd_odomned = Eigen::Affine3d::Identity();
-    T_localfrd_odomned.translation() << msg->position[0], msg->position[1],
-        msg->position[2];
-    T_localfrd_odomned.linear() =
-        Eigen::Quaterniond(msg->q[0], msg->q[1], msg->q[2], msg->q[3])
-            .toRotationMatrix();
-    Eigen::Affine3d T_localflu_odomflu = T_odomned_odomflu_ * T_localfrd_odomned * T_localflu_localfrd_;
+    Eigen::Isometry3d T_localflu_odomflu = Eigen::Isometry3d::Identity();
+
+    // set position
+    switch (msg->pose_frame) {
+    case px4_msgs::msg::VehicleOdometry::POSE_FRAME_NED: {
+      Eigen::Isometry3d T_localfrd_odomned = Eigen::Isometry3d::Identity();
+      T_localfrd_odomned.translation() << msg->position[0], msg->position[1],
+          msg->position[2];
+      T_localfrd_odomned.linear() =
+          Eigen::Quaterniond(msg->q[0], msg->q[1], msg->q[2], msg->q[3])
+              .toRotationMatrix();
+      T_localflu_odomflu =
+          T_odomned_odomflu_ * T_localfrd_odomned * T_localflu_localfrd_;
+      break;
+    }
+
+    case px4_msgs::msg::VehicleOdometry::POSE_FRAME_FRD: {
+      Eigen::Isometry3d T_localfrd_odomfrd = Eigen::Isometry3d::Identity();
+      T_localfrd_odomfrd.translation() << msg->position[0], msg->position[1],
+          msg->position[2];
+      T_localfrd_odomfrd.linear() =
+          Eigen::Quaterniond(msg->q[0], msg->q[1], msg->q[2], msg->q[3])
+              .toRotationMatrix();
+      T_localflu_odomflu =
+          T_odomfrd_odomflu_ * T_localfrd_odomfrd * T_localflu_localfrd_;
+      break;
+    }
+
+    default:
+      break;
+    }
     cur_pose_.position = T_localflu_odomflu.translation();
     cur_pose_.orientation = T_localflu_odomflu.linear();
+
+    // set velocity
     cur_pose_.linear_vel << msg->velocity[0], msg->velocity[1],
         msg->velocity[2];
     cur_pose_.angle_vel << msg->angular_velocity[0], msg->angular_velocity[1],
         msg->angular_velocity[2];
-    cur_pose_.linear_vel = T_odomned_odomflu_ * cur_pose_.linear_vel;
-    cur_pose_.angle_vel = T_odomned_odomflu_ * cur_pose_.angle_vel;
+    switch (msg->velocity_frame) {
+    case px4_msgs::msg::VehicleOdometry::VELOCITY_FRAME_NED: {
+      cur_pose_.linear_vel = T_odomned_odomflu_.linear() * cur_pose_.linear_vel;
+      cur_pose_.angle_vel = T_odomned_odomflu_.linear() * cur_pose_.angle_vel;
+      break;
+    }
+
+    case px4_msgs::msg::VehicleOdometry::VELOCITY_FRAME_FRD: {
+      cur_pose_.linear_vel = T_odomfrd_odomflu_.linear() * cur_pose_.linear_vel;
+      cur_pose_.angle_vel = T_odomfrd_odomflu_.linear() * cur_pose_.angle_vel;
+      break;
+    }
+
+    case px4_msgs::msg::VehicleOdometry::VELOCITY_FRAME_BODY_FRD: {
+      cur_pose_.linear_vel = T_localflu_odomflu.linear() *
+                             T_localfrd_localflu_.linear() *
+                             cur_pose_.linear_vel;
+      cur_pose_.angle_vel = T_localflu_odomflu.linear() *
+                            T_localfrd_localflu_.linear() * cur_pose_.angle_vel;
+      break;
+    }
+
+    default:
+      break;
+    }
+
     cur_pose_.yaw = quaternion_to_yaw(cur_pose_.orientation);
     cur_pose_.stamp = msg->timestamp * 1000; // us -> ns
   }
@@ -291,10 +343,12 @@ private:
   rclcpp::TimerBase::SharedPtr timer_50hz_ = nullptr;
   rclcpp::TimerBase::SharedPtr timer_once_1s_ = nullptr;
   px4_msgs::msg::OffboardControlMode ctrl_msg_;
-  Eigen::Affine3d T_odomflu_odomned_ = Eigen::Affine3d::Identity();
-  Eigen::Affine3d T_odomned_odomflu_ = Eigen::Affine3d::Identity();
-  Eigen::Affine3d T_localflu_localfrd_ = Eigen::Affine3d::Identity();
-  Eigen::Affine3d T_localfrd_localflu_ = Eigen::Affine3d::Identity();
+  Eigen::Isometry3d T_odomflu_odomned_ = Eigen::Isometry3d::Identity();
+  Eigen::Isometry3d T_odomned_odomflu_ = Eigen::Isometry3d::Identity();
+  Eigen::Isometry3d T_odomfrd_odomflu_ = Eigen::Isometry3d::Identity();
+  Eigen::Isometry3d T_odomflu_odomfrd_ = Eigen::Isometry3d::Identity();
+  Eigen::Isometry3d T_localflu_localfrd_ = Eigen::Isometry3d::Identity();
+  Eigen::Isometry3d T_localfrd_localflu_ = Eigen::Isometry3d::Identity();
   double max_speed_;
   double max_acc_;
   double max_jerk_;
