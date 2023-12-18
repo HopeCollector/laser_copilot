@@ -4,6 +4,8 @@
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/trajectory_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <mavros_msgs/msg/position_target.hpp>
 #include <px4_msgs/msg/vehicle_status.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
@@ -29,22 +31,32 @@ public:
 private:
   void init_cb() {
     using std::placeholders::_1;
-    sub_position_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
+#ifdef OPT_CONTROLLER_USE_PX4_MSG
+    sub_px4_odom_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
         "sub/px4_odom", rclcpp::SensorDataQoS(),
         std::bind(&safe_fly_controller::cb_px4_odometry, this, _1));
     // sub_status_ = create_subscription<px4_msgs::msg::VehicleStatus>(
     //     "/fmu/out/vehicle_status", rclcpp::SensorDataQoS(),
     //     std::bind(&safe_fly_controller::cb_status, this, _1));
+    pub_px4_cmd_ = create_publisher<px4_msgs::msg::TrajectorySetpoint>(
+        "/fmu/in/trajectory_setpoint", rclcpp::SensorDataQoS());
+    pub_px4_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
+        "/fmu/in/offboard_control_mode", rclcpp::SensorDataQoS());
+#endif
+
+#ifdef OPT_CONTROLLER_USE_MAVROS_MSG
+    sub_nav_odom_ = create_subscription<nav_msgs::msg::Odometry>(
+        "sub/nav_odom", rclcpp::SensorDataQoS(),
+        std::bind(&safe_fly_controller::cb_nav_odometry, this, _1));
+    pub_dbg_ =
+        create_publisher<std_msgs::msg::Float64MultiArray>("pub/debug", 5);
+#endif
+
     sub_goal_ = create_subscription<geometry_msgs::msg::PoseStamped>(
         "sub/goal", 5, std::bind(&safe_fly_controller::cb_goal, this, _1));
     sub_objs_ = create_subscription<sensor_msgs::msg::LaserScan>(
-      "sub/objs", 5, std::bind(&safe_fly_controller::cb_objs, this, _1));
-    pub_cmd_ = create_publisher<px4_msgs::msg::TrajectorySetpoint>(
-        "/fmu/in/trajectory_setpoint", rclcpp::SensorDataQoS());
-    pub_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
-        "/fmu/in/offboard_control_mode", rclcpp::SensorDataQoS());
-    pub_dbg_ = create_publisher<std_msgs::msg::Float64MultiArray>(
-        "pub/debug", 5);
+        "sub/objs", 5, std::bind(&safe_fly_controller::cb_objs, this, _1));
+
     timer_once_1s_ = create_wall_timer(1s, [this](){
       this->timer_once_1s_->cancel();
       this->T_odomflu_odomned_.linear() = Eigen::Matrix3d(
@@ -151,6 +163,21 @@ private:
     cur_pose_.stamp = msg->timestamp * 1000; // us -> ns
   }
 
+  void cb_nav_odometry(nav_msgs::msg::Odometry::ConstSharedPtr msg) {
+    const auto& pos = msg->pose.pose.position;
+    const auto& ori = msg->pose.pose.orientation;
+    cur_pose_.position << pos.x, pos.y, pos.z;
+    cur_pose_.orientation = Eigen::Quaterniond(ori.w, ori.x, ori.y, ori.z);
+    cur_pose_.yaw = quaternion_to_yaw(cur_pose_.orientation);
+    const auto& vel = msg->twist.twist.linear;
+    const auto& ang_vel = msg->twist.twist.angular;
+    cur_pose_.linear_vel << vel.x, vel.y, vel.z;
+    cur_pose_.angle_vel << ang_vel.x, ang_vel.y, ang_vel.z;
+    cur_pose_.stamp = static_cast<uint64_t>(msg->header.stamp.sec) *
+                          static_cast<uint64_t>(1e9) +
+                      static_cast<uint64_t>(msg->header.stamp.nanosec);
+  }
+
   void cb_status(px4_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
     RCLCPP_INFO_STREAM(get_logger(), int(msg->arming_state));
   }
@@ -171,8 +198,10 @@ private:
   }
 
   void cb_50hz() {
+#ifdef OPT_CONTROLLER_USE_PX4_MSG
     ctrl_msg_.timestamp = get_clock()->now().nanoseconds() * 1e-3;
-    pub_mode_ctrl_->publish(ctrl_msg_);
+    pub_px4_mode_ctrl_->publish(ctrl_msg_);
+#endif
     go_to_target();
   }
 
@@ -196,7 +225,13 @@ private:
     int vyaw_dir = vyaw / std::abs(vyaw);
     vyaw = std::min(std::abs(vyaw), max_yaw_speed_) * vyaw_dir;
 
-    action_set_speed(speed_vec, acc_vec, vyaw);
+#ifdef OPT_CONTROLLER_USE_PX4_MSG
+    pub_px4_setpoint(speed_vec, acc_vec, vyaw);
+#endif
+
+#ifdef OPT_CONTROLLER_USE_MAVROS_MSG
+    pub_mavros_setpoint(speed_vec, acc_vec, vyaw);
+#endif
 
     std_msgs::msg::Float64MultiArray dbg_msg;
     dbg_msg.data.push_back(cur_pose_.position[0]); // 0
@@ -219,7 +254,7 @@ private:
     pub_dbg_->publish(dbg_msg);
   }
 
-  void action_set_speed(Eigen::Vector3d vel, Eigen::Vector3d acc, double vyaw) {
+  void pub_px4_setpoint(Eigen::Vector3d vel, Eigen::Vector3d acc, double vyaw) {
     vel = T_odomflu_odomned_ * vel;
     acc = T_odomflu_odomned_ * acc;
     px4_msgs::msg::TrajectorySetpoint msg;
@@ -230,7 +265,27 @@ private:
     msg.acceleration = {float(acc[0]), float(acc[1]), float(acc[2])};
     msg.jerk = {NAN, NAN, NAN};
     msg.yawspeed = (T_odomflu_odomned_ * Eigen::Vector3d{0, 0, vyaw})[2];
-    pub_cmd_->publish(msg);
+    pub_px4_cmd_->publish(msg);
+  }
+
+  void pub_mavros_setpoint(Eigen::Vector3d vel, Eigen::Vector3d acc,
+                           double vyaw) {
+    mavros_msgs::msg::PositionTarget msg;
+    msg.header.stamp = get_clock()->now();
+    msg.header.frame_id = "odom"; // mavros donot use this
+    msg.coordinate_frame = mavros_msgs::msg::PositionTarget::FRAME_LOCAL_NED;
+    msg.type_mask = mavros_msgs::msg::PositionTarget::IGNORE_PX |
+                    mavros_msgs::msg::PositionTarget::IGNORE_PY |
+                    mavros_msgs::msg::PositionTarget::IGNORE_PZ |
+                    mavros_msgs::msg::PositionTarget::IGNORE_YAW;
+    msg.velocity.x = vel[0];
+    msg.velocity.y = vel[1];
+    msg.velocity.z = vel[2];
+    msg.acceleration_or_force.x = acc[0];
+    msg.acceleration_or_force.y = acc[1];
+    msg.acceleration_or_force.z = acc[2];
+    msg.yaw_rate = vyaw;
+    pub_mavros_pos_target_->publish(msg);
   }
 
   void cb_objs(sensor_msgs::msg::LaserScan::ConstSharedPtr msg) {
@@ -328,17 +383,21 @@ private:
 
 private:
   rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr
-      sub_position_ = nullptr;
+      sub_px4_odom_ = nullptr;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_nav_odom_ =
+      nullptr;
   rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr sub_status_ =
       nullptr;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal_ =
       nullptr;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_objs_ =
       nullptr;
-  rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_cmd_ =
+  rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_px4_cmd_ =
       nullptr;
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr
-      pub_mode_ctrl_ = nullptr;
+      pub_px4_mode_ctrl_ = nullptr;
+  rclcpp::Publisher<mavros_msgs::msg::PositionTarget>::SharedPtr
+      pub_mavros_pos_target_ = nullptr;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr pub_dbg_ = nullptr;
   rclcpp::TimerBase::SharedPtr timer_50hz_ = nullptr;
   rclcpp::TimerBase::SharedPtr timer_once_1s_ = nullptr;
