@@ -46,16 +46,18 @@ private:
 
 #ifdef OPT_CONTROLLER_USE_MAVROS_MSG
     sub_nav_odom_ = create_subscription<nav_msgs::msg::Odometry>(
-        "sub/nav_odom", rclcpp::SensorDataQoS(),
+        "sub/mavros/odometry/out", rclcpp::SensorDataQoS(),
         std::bind(&safe_fly_controller::cb_nav_odometry, this, _1));
-    pub_dbg_ =
-        create_publisher<std_msgs::msg::Float64MultiArray>("pub/debug", 5);
+    pub_mavros_pos_target_ = create_publisher<mavros_msgs::msg::PositionTarget>(
+        "/mavros/setpoint_raw/local", rclcpp::SensorDataQoS());
 #endif
 
     sub_goal_ = create_subscription<geometry_msgs::msg::PoseStamped>(
         "sub/goal", 5, std::bind(&safe_fly_controller::cb_goal, this, _1));
     sub_objs_ = create_subscription<sensor_msgs::msg::LaserScan>(
         "sub/objs", 5, std::bind(&safe_fly_controller::cb_objs, this, _1));
+    pub_dbg_ =
+        create_publisher<std_msgs::msg::Float64MultiArray>("pub/debug", 5);
 
     timer_once_1s_ = create_wall_timer(1s, [this](){
       this->timer_once_1s_->cancel();
