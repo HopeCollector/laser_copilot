@@ -45,24 +45,25 @@ struct velodyne_point_v1_t {
   alignas(2) uint16_t ring;
 };
 
+template <typename T>
 struct pid_controller {
   double kp = 1.0;
   double ki = 0.0;
   double kd = 0.0;
-  double last_err = 0.0;
-  double all_err = 0.0;
-  double operator()(double setpoint, double measure) {
-    double err = setpoint - measure;
+  T last_err;
+  T all_err;
+  T operator()(T setpoint, T measure) {
+    T err = setpoint - measure;
     all_err += err;
-    double delta = err - last_err;
-    double output = kp * err + ki * all_err + kd * delta;
+    T delta = err - last_err;
+    T output = kp * err + ki * all_err + kd * delta;
     last_err = err;
     return output;
   }
-  double operator()(double err) {
+  T operator()(T err) {
     all_err += err;
-    double delta = err - last_err;
-    double output = kp * err + ki * all_err + kd * delta;
+    T delta = err - last_err;
+    T output = kp * err + ki * all_err + kd * delta;
     last_err = err;
     return output;
   }

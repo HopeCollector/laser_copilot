@@ -26,6 +26,10 @@ public:
     load_param();
     init_ctrl_msg();
     vel_pid_.kp = 0.3;
+    vel_pid_.all_err = Eigen::Vector3d::Zero();
+    vel_pid_.last_err = Eigen::Vector3d::Zero();
+    yaw_pid_.all_err = 0.0;
+    yaw_pid_.last_err = 0.0;
   }
 
 private:
@@ -208,7 +212,7 @@ private:
   }
 
   void go_to_target() {
-    Eigen::Vector3d speed_vec = target_.position - cur_pose_.position;
+    Eigen::Vector3d speed_vec = vel_pid_(target_.position, cur_pose_.position);
     Eigen::Vector3d speed_dir = speed_vec / speed_vec.norm();
     Eigen::Vector3d acc_vec = speed_vec - cur_pose_.linear_vel;
     Eigen::Vector3d acc_dir = acc_vec / acc_vec.norm();
@@ -347,7 +351,7 @@ private:
       const double delay_distance = obj_sensor_delay_ns_ * cur_vel_parallel * 1e-9;
       const double stop_distance =
           std::max(0.0, objs_msg_.ranges[i] - delay_distance - min_distance_to_keep);
-      const double vel_max_pid = vel_pid_(stop_distance);
+      const double vel_max_pid = stop_distance * 0.3;
       const double vel_max_smooth = smooth_velocity_from_distance(stop_distance);
       const double projection = direction.dot(sp_direction);
       double vel_max_dir = sp_speed;
@@ -418,8 +422,8 @@ private:
   pose_t cur_pose_;
   pose_t prv_pose_;
   setpoint_t target_;
-  pid_controller vel_pid_;
-  pid_controller yaw_pid_;
+  pid_controller<Eigen::Vector3d> vel_pid_;
+  pid_controller<double> yaw_pid_;
   sensor_msgs::msg::LaserScan objs_msg_;
   double obj_sensor_delay_ns_;
 };
