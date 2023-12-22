@@ -179,6 +179,8 @@ private:
     const auto& ang_vel = msg->twist.twist.angular;
     cur_pose_.linear_vel << vel.x, vel.y, vel.z;
     cur_pose_.angle_vel << ang_vel.x, ang_vel.y, ang_vel.z;
+    cur_pose_.linear_vel = cur_pose_.orientation * cur_pose_.linear_vel;
+    cur_pose_.angle_vel = cur_pose_.orientation * cur_pose_.angle_vel;
     cur_pose_.stamp = static_cast<uint64_t>(msg->header.stamp.sec) *
                           static_cast<uint64_t>(1e9) +
                       static_cast<uint64_t>(msg->header.stamp.nanosec);
