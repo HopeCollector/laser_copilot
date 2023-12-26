@@ -1,6 +1,7 @@
 #include "common.hh"
 #include <chrono>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/trajectory_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
@@ -56,12 +57,16 @@ private:
         "/mavros/setpoint_raw/local", rclcpp::SensorDataQoS());
 #endif
 
+    sub_vel_ = create_subscription<geometry_msgs::msg::Twist>(
+        "sub/vel", 5, std::bind(&safe_fly_controller::cb_vel, this, _1));
     sub_goal_ = create_subscription<geometry_msgs::msg::PoseStamped>(
         "sub/goal", 5, std::bind(&safe_fly_controller::cb_goal, this, _1));
     sub_objs_ = create_subscription<sensor_msgs::msg::LaserScan>(
         "sub/objs", 5, std::bind(&safe_fly_controller::cb_objs, this, _1));
     pub_dbg_ =
         create_publisher<std_msgs::msg::Float64MultiArray>("pub/debug", 5);
+    timer_50hz_ = this->create_wall_timer(
+        20ms, std::bind(&safe_fly_controller::cb_50hz, this));
 
     timer_once_1s_ = create_wall_timer(1s, [this](){
       this->timer_once_1s_->cancel();
@@ -190,19 +195,23 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), int(msg->arming_state));
   }
 
+  void cb_vel(geometry_msgs::msg::Twist::ConstSharedPtr msg) {
+    double half_yaw = (cur_pose_.yaw + msg->angular.z) / 2.0;
+    target_ = setpoint_t({cur_pose_.position[0] + msg->linear.x,
+                          cur_pose_.position[1] + msg->linear.y,
+                          cur_pose_.position[2] + msg->linear.z},
+                         {std::cos(half_yaw), 0., 0., std::sin(half_yaw)});
+  }
+
   void cb_goal(geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
     target_ = setpoint_t({msg->pose.position.x, msg->pose.position.y,
                           msg->pose.position.z < 0.2 ? cur_pose_.position.z()
                                                      : msg->pose.position.z},
                          {msg->pose.orientation.w, msg->pose.orientation.x,
                           msg->pose.orientation.y, msg->pose.orientation.z});
-    if(!timer_50hz_) {
-      timer_50hz_ = this->create_wall_timer(
-          20ms, std::bind(&safe_fly_controller::cb_50hz, this));
-    }
     RCLCPP_INFO_STREAM(get_logger(),
-                       "goint to: " << target_.position.transpose() << " "
-                                    << target_.yaw / M_PI * 180.0);
+                       "goint to: " << target_.value().position.transpose() << " "
+                                    << target_.value().yaw / M_PI * 180.0);
   }
 
   void cb_50hz() {
@@ -210,11 +219,12 @@ private:
     ctrl_msg_.timestamp = get_clock()->now().nanoseconds() * 1e-3;
     pub_px4_mode_ctrl_->publish(ctrl_msg_);
 #endif
-    go_to_target();
+    if(target_.has_value())
+      go_to_target(target_.value());
   }
 
-  void go_to_target() {
-    Eigen::Vector3d speed_vec = vel_pid_(target_.position, cur_pose_.position);
+  void go_to_target(const setpoint_t & tgt) {
+    Eigen::Vector3d speed_vec = vel_pid_(tgt.position, cur_pose_.position);
     Eigen::Vector3d speed_dir = speed_vec / speed_vec.norm();
     Eigen::Vector3d acc_vec = speed_vec - cur_pose_.linear_vel;
     Eigen::Vector3d acc_dir = acc_vec / acc_vec.norm();
@@ -224,7 +234,7 @@ private:
     adjust_velocity_setpoint(speed_vec);
     acc_vec = speed_vec - cur_pose_.linear_vel;
 
-    double vyaw = target_.yaw - cur_pose_.yaw;
+    double vyaw = tgt.yaw - cur_pose_.yaw;
     if (vyaw > M_PI) {
       vyaw -= 2 * M_PI;
     } else if (vyaw < -M_PI) {
@@ -400,6 +410,8 @@ private:
       nullptr;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_objs_ =
       nullptr;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_vel_ =
+      nullptr;
   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_px4_cmd_ =
       nullptr;
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr
@@ -423,7 +435,7 @@ private:
   double min_dist_;
   pose_t cur_pose_;
   pose_t prv_pose_;
-  setpoint_t target_;
+  std::optional<setpoint_t> target_{};
   pid_controller<Eigen::Vector3d> vel_pid_;
   pid_controller<double> yaw_pid_;
   sensor_msgs::msg::LaserScan objs_msg_;
