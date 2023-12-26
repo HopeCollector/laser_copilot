@@ -225,15 +225,18 @@ private:
 
   void go_to_target(const setpoint_t & tgt) {
     Eigen::Vector3d speed_vec = vel_pid_(tgt.position, cur_pose_.position);
-    Eigen::Vector3d speed_dir = speed_vec / speed_vec.norm();
     Eigen::Vector3d acc_vec = speed_vec - cur_pose_.linear_vel;
-    Eigen::Vector3d acc_dir = acc_vec / acc_vec.norm();
-    acc_vec = std::min(max_acc_, acc_vec.norm()) * acc_dir;
-    speed_vec = std::min(max_speed_, (cur_pose_.linear_vel + acc_vec).norm()) *
-                speed_dir;
-    adjust_velocity_setpoint(speed_vec);
-    acc_vec = speed_vec - cur_pose_.linear_vel;
-
+    if (speed_vec.norm() > 0.05) {
+      Eigen::Vector3d speed_dir = speed_vec / speed_vec.norm();
+      Eigen::Vector3d acc_dir = acc_vec / acc_vec.norm();
+      acc_vec = std::min(max_acc_, acc_vec.norm()) * acc_dir;
+      speed_vec =
+          std::min(max_speed_, (cur_pose_.linear_vel + acc_vec).norm()) *
+          speed_dir;
+      adjust_velocity_setpoint(speed_vec);
+      acc_vec = speed_vec - cur_pose_.linear_vel;
+    }
+    
     double vyaw = tgt.yaw - cur_pose_.yaw;
     if (vyaw > M_PI) {
       vyaw -= 2 * M_PI;
