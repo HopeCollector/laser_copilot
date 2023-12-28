@@ -196,11 +196,19 @@ private:
   }
 
   void cb_vel(geometry_msgs::msg::Twist::ConstSharedPtr msg) {
-    double half_yaw = (cur_pose_.yaw + msg->angular.z) / 2.0;
-    target_ = setpoint_t({cur_pose_.position[0] + msg->linear.x,
-                          cur_pose_.position[1] + msg->linear.y,
-                          cur_pose_.position[2] + msg->linear.z},
-                         {std::cos(half_yaw), 0., 0., std::sin(half_yaw)});
+    if (!target_.has_value()) return;
+    auto& tgt = target_.value();
+    tgt.position[0] = std::abs(msg->linear.x) > 0.05
+                          ? (cur_pose_.position[0] + msg->linear.x)
+                          : tgt.position[0];
+    tgt.position[1] = std::abs(msg->linear.y) > 0.05
+                          ? (cur_pose_.position[1] + msg->linear.y)
+                          : tgt.position[1];
+    tgt.position[2] = std::abs(msg->linear.z) > 0.05
+                          ? (cur_pose_.position[2] + msg->linear.z)
+                          : tgt.position[2];
+    tgt.yaw =
+        std::abs(msg->angular.z) > 0.05 ? (cur_pose_.yaw + msg->angular.z) : tgt.yaw;
   }
 
   void cb_goal(geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
@@ -272,6 +280,11 @@ private:
     dbg_msg.data.push_back(acc_vec[1]);
     dbg_msg.data.push_back(acc_vec[2]);
     dbg_msg.data.push_back(vyaw); // 16
+    const auto &tgt = target_.value_or(setpoint_t{});
+    dbg_msg.data.push_back(tgt.position[0]); // 17
+    dbg_msg.data.push_back(tgt.position[1]);
+    dbg_msg.data.push_back(tgt.position[2]);
+    dbg_msg.data.push_back(tgt.yaw * RAD_TO_DEG); // 20
     pub_dbg_->publish(dbg_msg);
   }
 
