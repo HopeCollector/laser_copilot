@@ -280,7 +280,6 @@ private:
     dbg_msg.data.push_back(acc_vec[1]);
     dbg_msg.data.push_back(acc_vec[2]);
     dbg_msg.data.push_back(vyaw); // 16
-    const auto &tgt = target_.value_or(setpoint_t{});
     dbg_msg.data.push_back(tgt.position[0]); // 17
     dbg_msg.data.push_back(tgt.position[1]);
     dbg_msg.data.push_back(tgt.position[2]);
