@@ -25,12 +25,7 @@ public:
       : Node("safe_fly_controller", options){
     init_cb();
     load_param();
-    init_ctrl_msg();
-    vel_pid_.kp = 0.3;
-    vel_pid_.all_err = Eigen::Vector3d::Zero();
-    vel_pid_.last_err = Eigen::Vector3d::Zero();
-    yaw_pid_.all_err = 0.0;
-    yaw_pid_.last_err = 0.0;
+    init_members();
   }
 
 private:
@@ -94,7 +89,17 @@ private:
     obj_sensor_delay_ns_ = declare_parameter("object_sensor_delay_ms", 100) * 1e6;
   }
 
-  void init_ctrl_msg() {
+  void init_members() {
+    vel_pid_.kp = 0.3;
+    vel_pid_.all_err = Eigen::Vector3d::Zero();
+    vel_pid_.last_err = Eigen::Vector3d::Zero();
+
+    yaw_pid_.all_err = 0.0;
+    yaw_pid_.last_err = 0.0;
+
+    objs_msg_.range_min = 100.0;
+    objs_msg_.range_max = 0.0;
+
     ctrl_msg_.position = false;
     ctrl_msg_.attitude = true;
     ctrl_msg_.velocity = true;
@@ -270,7 +275,7 @@ private:
     dbg_msg.data.push_back(cur_pose_.linear_vel[0]); // 4
     dbg_msg.data.push_back(cur_pose_.linear_vel[1]);
     dbg_msg.data.push_back(cur_pose_.linear_vel[2]);
-    dbg_msg.data.push_back(cur_pose_.yaw / M_PI * 180.0); // 7
+    dbg_msg.data.push_back(cur_pose_.yaw * RAD_TO_DEG); // 7
     dbg_msg.data.push_back(speed_vec.norm()); // 8
     dbg_msg.data.push_back(speed_vec[0]); // 9
     dbg_msg.data.push_back(speed_vec[1]);
@@ -336,7 +341,7 @@ private:
     if (objs_msg_.range_min > objs_msg_.range_max) {
       return;
     }
-    if (setpoint.z() > 0.05 || setpoint.norm() < 0.05) {
+    if (std::abs(setpoint.z()) > 0.05 || setpoint.norm() < 0.05) {
       return;
     }
     double speed = setpoint.norm();
