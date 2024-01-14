@@ -47,6 +47,7 @@ def generate_launch_description():
             ),
             launch_other_file(pkg_name_app, "safe_fly_controller.launch.py"),
             launch_other_file(pkg_name_app, "obj_dist.launch.py"),
+            launch_other_file(pkg_name_app, "sbus_bridge.launch.py"),
             launch_in_condition(pkg_name_app, "visualization.launch.py", "use_gui"),
         ]
     )
