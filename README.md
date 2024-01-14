@@ -4,6 +4,14 @@
 
 仓库中大部分的节点都支持 compose
 
+## 依赖
+
+- periphery: 串口通信 https://github.com/vsergeev/c-periphery.git
+- px4_msgs: 飞控通信 https://github.com/PX4/px4_msgs/tree/release/1.14
+- mavros_msg: 飞控通信 https://github.com/mavlink/mavros.git
+- livox_ros_driver2: 读取 livox mid360 激光数据 https://github.com/HopeCollector/livox_ros_driver2.git
+
+
 ## 文件结构
 
 - laser_copilot_applications: ros2 相关的 cpp、python 文件，并提供启动单个节点的 launch 文件
