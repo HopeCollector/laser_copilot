@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 project(laser_copilot_applications)
 
+option(OPT_CONTROLLER_USE_PX4_MSG "Use px4_msgs for controller" OFF)
+option(OPT_CONTROLLER_USE_MAVROS_MSG "Use mavros_msgs for controller" ON)
+
 add_compile_options( -std=c++2a -O3)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -19,6 +22,10 @@ rclcpp_components_register_nodes(obj_dist_component
 
 ament_auto_add_library(safe_fly_controller_component SHARED src/safe_fly_controller.cc)
 target_link_libraries(safe_fly_controller_component Eigen3::Eigen)
+target_compile_definitions(safe_fly_controller_component
+  PRIVATE "OPT_CONTROLLER_USE_PX4_MSG=$<BOOL:${OPT_CONTROLLER_USE_PX4_MSG}>"
+  PRIVATE "OPT_CONTROLLER_USE_MAVROS_MSG=$<BOOL:${OPT_CONTROLLER_USE_MAVROS_MSG}>"
+)
 rclcpp_components_register_nodes(safe_fly_controller_component
   "laser_copilot_applications::safe_fly_controller"
 )

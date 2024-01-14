@@ -40,6 +40,7 @@ public:
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     odom_frame_id_ = declare_parameter("odom_frame_id", "odom");
+    drone_frame_id_ = declare_parameter("drone_frame_id", "drone_link");
   }
 
 private:
@@ -135,7 +136,7 @@ private:
     static bool is_created_msg = false;
     static geometry_msgs::msg::TransformStamped msg;
     if (!is_created_msg) {
-      msg.header.frame_id = "x500_lidar/link";
+      msg.header.frame_id = drone_frame_id_;
       msg.child_frame_id = "lidar_link";
       is_created_msg = true;
     }
@@ -157,6 +158,7 @@ private:
   pose_t cur_pos_;
   nav_msgs::msg::Path msg_path_;
   std::string odom_frame_id_;
+  std::string drone_frame_id_;
 };
 }; // namespace laser_copilot_applications
 
