@@ -86,7 +86,7 @@ private:
     baudrate_ = declare_parameter<int>("baudrate", 115200);
     serial_type_ =
         static_cast<serial_type_t>(declare_parameter<int>("serial_type", 0));
-    enable_channel_ = declare_parameter<int>("enable_channel", 5);
+    enable_channel_ = declare_parameter<int>("enable_channel", 5) - 1;
     deadzone_ = declare_parameter<int>("deadzone", 20);
     channel_max_ = declare_parameter<int>("channel_max", 2000);
     channel_min_ = declare_parameter<int>("channel_min", 0);
