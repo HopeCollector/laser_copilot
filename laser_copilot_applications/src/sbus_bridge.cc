@@ -187,9 +187,9 @@ private:
     }
     geometry_msgs::msg::Twist msg;
     msg.linear.x = channel_to_spped(ctrl_msg_.channels[CHANNEL_PITCH]);
-    msg.linear.y = channel_to_spped(ctrl_msg_.channels[CHANNEL_ROLL]);
+    msg.linear.y = -channel_to_spped(ctrl_msg_.channels[CHANNEL_ROLL]);
     msg.linear.z = channel_to_spped(ctrl_msg_.channels[CHANNEL_THROTTLE]);
-    msg.angular.z = channel_to_spped(ctrl_msg_.channels[CHANNEL_YAW]) /
+    msg.angular.z = -channel_to_spped(ctrl_msg_.channels[CHANNEL_YAW]) /
                     max_speed_ * max_angular_speed_; // to rad/s
     pub_twist_->publish(msg);
   }
