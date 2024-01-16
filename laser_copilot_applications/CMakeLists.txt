@@ -41,6 +41,16 @@ rclcpp_components_register_nodes(visualization_helper_component
   "laser_copilot_applications::visualization_helper"
 )
 
+ament_auto_add_library(sbus_bridge_component SHARED src/sbus_bridge.cc)
+target_include_directories(sbus_bridge_component
+  PRIVATE ${CMAKE_INSTALL_PREFIX}/../periphery/include)
+target_link_directories(sbus_bridge_component BEFORE
+  PRIVATE ${CMAKE_INSTALL_PREFIX}/../periphery/lib)
+target_link_libraries(sbus_bridge_component periphery)
+rclcpp_components_register_nodes(sbus_bridge_component
+  "laser_copilot_applications::sbus_bridge"
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
