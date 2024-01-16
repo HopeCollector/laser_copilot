@@ -2,15 +2,15 @@
 #include <chrono>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <mavros_msgs/msg/position_target.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/trajectory_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
-#include <nav_msgs/msg/odometry.hpp>
-#include <mavros_msgs/msg/position_target.hpp>
 #include <px4_msgs/msg/vehicle_status.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/float64_multi_array.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
 namespace laser_copilot_applications {
 
 constexpr int FILTER_SIZE = 120.0f / 2.0f * DEG_TO_RAD / RAD_INC;
@@ -22,7 +22,7 @@ using namespace std::chrono_literals;
 class safe_fly_controller : public rclcpp::Node {
 public:
   explicit safe_fly_controller(const rclcpp::NodeOptions &options)
-      : Node("safe_fly_controller", options){
+      : Node("safe_fly_controller", options) {
     init_cb();
     load_param();
     init_members();
@@ -57,7 +57,7 @@ private:
     timer_50hz_ = this->create_wall_timer(
         20ms, std::bind(&safe_fly_controller::cb_50hz, this));
 
-    timer_once_1s_ = create_wall_timer(1s, [this](){
+    timer_once_1s_ = create_wall_timer(1s, [this]() {
       this->timer_once_1s_->cancel();
       this->T_odomflu_odomned_.linear() = Eigen::Matrix3d(
           Eigen::AngleAxisd(this->cur_pose_.yaw, Eigen::Vector3d::UnitZ()) *
@@ -80,7 +80,8 @@ private:
     max_jerk_ = declare_parameter("max_jerk", 0.2);
     max_yaw_speed_ = declare_parameter("max_yaw_speed", 30.0) / 180.0 * M_PI;
     min_dist_ = declare_parameter("min_distance", 1.0);
-    obj_sensor_delay_ns_ = declare_parameter("object_sensor_delay_ms", 100) * 1e6;
+    obj_sensor_delay_ns_ =
+        declare_parameter("object_sensor_delay_ms", 100) * 1e6;
     target_.position.z() = declare_parameter("takeoff_height", 1.0);
   }
 
@@ -104,13 +105,13 @@ private:
   }
 
   void cb_nav_odometry(nav_msgs::msg::Odometry::ConstSharedPtr msg) {
-    const auto& pos = msg->pose.pose.position;
-    const auto& ori = msg->pose.pose.orientation;
+    const auto &pos = msg->pose.pose.position;
+    const auto &ori = msg->pose.pose.orientation;
     cur_pose_.position << pos.x, pos.y, pos.z;
     cur_pose_.orientation = Eigen::Quaterniond(ori.w, ori.x, ori.y, ori.z);
     cur_pose_.yaw = quaternion_to_yaw(cur_pose_.orientation);
-    const auto& vel = msg->twist.twist.linear;
-    const auto& ang_vel = msg->twist.twist.angular;
+    const auto &vel = msg->twist.twist.linear;
+    const auto &ang_vel = msg->twist.twist.angular;
     cur_pose_.linear_vel << vel.x, vel.y, vel.z;
     cur_pose_.angle_vel << ang_vel.x, ang_vel.y, ang_vel.z;
     cur_pose_.linear_vel = cur_pose_.orientation * cur_pose_.linear_vel;
@@ -122,16 +123,17 @@ private:
 
   void cb_vel(geometry_msgs::msg::Twist::ConstSharedPtr msg) {
     target_.position[0] = std::abs(msg->linear.x) > 0.05
-                          ? (cur_pose_.position[0] + msg->linear.x)
-                          : target_.position[0];
+                              ? (cur_pose_.position[0] + msg->linear.x)
+                              : target_.position[0];
     target_.position[1] = std::abs(msg->linear.y) > 0.05
-                          ? (cur_pose_.position[1] + msg->linear.y)
-                          : target_.position[1];
+                              ? (cur_pose_.position[1] + msg->linear.y)
+                              : target_.position[1];
     target_.position[2] = std::abs(msg->linear.z) > 0.05
-                          ? (cur_pose_.position[2] + msg->linear.z)
-                          : target_.position[2];
-    target_.yaw =
-        std::abs(msg->angular.z) > 0.05 ? (cur_pose_.yaw + msg->angular.z) : target_.yaw;
+                              ? (cur_pose_.position[2] + msg->linear.z)
+                              : target_.position[2];
+    target_.yaw = std::abs(msg->angular.z) > 0.05
+                      ? (cur_pose_.yaw + msg->angular.z)
+                      : target_.yaw;
   }
 
   void cb_goal(geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
@@ -145,11 +147,9 @@ private:
                                     << target_.yaw / M_PI * 180.0);
   }
 
-  void cb_50hz() {
-    go_to_target(target_);
-  }
+  void cb_50hz() { go_to_target(target_); }
 
-  void go_to_target(const setpoint_t & tgt) {
+  void go_to_target(const setpoint_t &tgt) {
     Eigen::Vector3d speed_vec = vel_pid_(tgt.position, cur_pose_.position);
     Eigen::Vector3d acc_vec = speed_vec - cur_pose_.linear_vel;
     if (speed_vec.norm() > 0.05) {
@@ -162,7 +162,7 @@ private:
       adjust_velocity_setpoint(speed_vec);
       acc_vec = speed_vec - cur_pose_.linear_vel;
     }
-    
+
     double vyaw = tgt.yaw - cur_pose_.yaw;
     if (vyaw > M_PI) {
       vyaw -= 2 * M_PI;
@@ -187,19 +187,19 @@ private:
     dbg_msg.data.push_back(cur_pose_.position[1]);
     dbg_msg.data.push_back(cur_pose_.position[2]);
     dbg_msg.data.push_back(cur_pose_.linear_vel.norm()); // 3
-    dbg_msg.data.push_back(cur_pose_.linear_vel[0]); // 4
+    dbg_msg.data.push_back(cur_pose_.linear_vel[0]);     // 4
     dbg_msg.data.push_back(cur_pose_.linear_vel[1]);
     dbg_msg.data.push_back(cur_pose_.linear_vel[2]);
     dbg_msg.data.push_back(cur_pose_.yaw * RAD_TO_DEG); // 7
-    dbg_msg.data.push_back(speed_vec.norm()); // 8
-    dbg_msg.data.push_back(speed_vec[0]); // 9
+    dbg_msg.data.push_back(speed_vec.norm());           // 8
+    dbg_msg.data.push_back(speed_vec[0]);               // 9
     dbg_msg.data.push_back(speed_vec[1]);
     dbg_msg.data.push_back(speed_vec[2]);
     dbg_msg.data.push_back(acc_vec.norm()); // 12
-    dbg_msg.data.push_back(acc_vec[0]); // 13
+    dbg_msg.data.push_back(acc_vec[0]);     // 13
     dbg_msg.data.push_back(acc_vec[1]);
     dbg_msg.data.push_back(acc_vec[2]);
-    dbg_msg.data.push_back(vyaw); // 16
+    dbg_msg.data.push_back(vyaw);            // 16
     dbg_msg.data.push_back(tgt.position[0]); // 17
     dbg_msg.data.push_back(tgt.position[1]);
     dbg_msg.data.push_back(tgt.position[2]);
@@ -274,7 +274,8 @@ private:
       const double mean_dist = mean_distance(i);
       const int id = wrap_id(i);
       const double deviation_cost = std::abs(i - sp_idx_original) / min_dist_;
-      const double cost = deviation_cost * WEIGHT_DEVIATION - mean_dist * WEIGHT_DISTANCE;
+      const double cost =
+          deviation_cost * WEIGHT_DEVIATION - mean_dist * WEIGHT_DISTANCE;
       if (cost < best_cost) {
         best_cost = cost;
         sp_idx_new = id;
@@ -288,18 +289,24 @@ private:
 
   void adjust_speed(Eigen::Vector3d &sp_direction, double sp_speed) {
     Eigen::Vector3d direction;
-    const double min_distance_to_keep = std::min<double>(objs_msg_.range_min, min_dist_);
+    const double min_distance_to_keep =
+        std::min<double>(objs_msg_.range_min, min_dist_);
     for (int i = 0; i < GROUP_NUM; i++) {
-      if (objs_msg_.ranges[i] >= MAX_DIST) continue;
+      if (objs_msg_.ranges[i] >= MAX_DIST)
+        continue;
       double angle = i * RAD_INC;
       direction << std::cos(angle), std::sin(angle), 0.;
-      if (sp_direction.dot(direction) <= 0) continue;
-      const double cur_vel_parallel = std::max(0.0, cur_pose_.linear_vel.dot(direction));
-      const double delay_distance = obj_sensor_delay_ns_ * cur_vel_parallel * 1e-9;
-      const double stop_distance =
-          std::max(0.0, objs_msg_.ranges[i] - delay_distance - min_distance_to_keep);
+      if (sp_direction.dot(direction) <= 0)
+        continue;
+      const double cur_vel_parallel =
+          std::max(0.0, cur_pose_.linear_vel.dot(direction));
+      const double delay_distance =
+          obj_sensor_delay_ns_ * cur_vel_parallel * 1e-9;
+      const double stop_distance = std::max(
+          0.0, objs_msg_.ranges[i] - delay_distance - min_distance_to_keep);
       const double vel_max_pid = stop_distance * 0.3;
-      const double vel_max_smooth = smooth_velocity_from_distance(stop_distance);
+      const double vel_max_smooth =
+          smooth_velocity_from_distance(stop_distance);
       const double projection = direction.dot(sp_direction);
       double vel_max_dir = sp_speed;
       if (projection > 0.01) {
@@ -341,15 +348,15 @@ private:
       nullptr;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_objs_ =
       nullptr;
-  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_vel_ =
-      nullptr;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_vel_ = nullptr;
   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr pub_px4_cmd_ =
       nullptr;
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr
       pub_px4_mode_ctrl_ = nullptr;
   rclcpp::Publisher<mavros_msgs::msg::PositionTarget>::SharedPtr
       pub_mavros_pos_target_ = nullptr;
-  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr pub_dbg_ = nullptr;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr pub_dbg_ =
+      nullptr;
   rclcpp::TimerBase::SharedPtr timer_50hz_ = nullptr;
   rclcpp::TimerBase::SharedPtr timer_once_1s_ = nullptr;
   px4_msgs::msg::OffboardControlMode ctrl_msg_;
