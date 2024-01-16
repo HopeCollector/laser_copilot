@@ -16,6 +16,7 @@ def get_composable_node():
                 "max_speed": LaunchConfiguration("max_speed"),
                 "max_yaw_speed": LaunchConfiguration("max_yaw_speed"),
                 "min_distance": LaunchConfiguration("min_distance"),
+                "takeoff_height": LaunchConfiguration("takeoff_height"),
             }
         ],
         remappings=[
@@ -40,6 +41,7 @@ def generate_launch_description():
                 "max_yaw_speed", default_value="30.0", description="degree/s"
             ),
             DeclareLaunchArgument("min_distance", default_value="1.0"),
+            DeclareLaunchArgument("takeoff_height", default_value="1.0"),
             LoadComposableNodes(
                 target_container="laser_copilot/container",
                 composable_node_descriptions=[get_composable_node()],

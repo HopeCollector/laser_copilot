@@ -87,6 +87,7 @@ private:
     max_yaw_speed_ = declare_parameter("max_yaw_speed", 30.0) / 180.0 * M_PI;
     min_dist_ = declare_parameter("min_distance", 1.0);
     obj_sensor_delay_ns_ = declare_parameter("object_sensor_delay_ms", 100) * 1e6;
+    target_.position.z() = declare_parameter("takeoff_height", 1.0);
   }
 
   void init_members() {
