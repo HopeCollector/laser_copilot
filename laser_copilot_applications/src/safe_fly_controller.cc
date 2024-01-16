@@ -201,19 +201,17 @@ private:
   }
 
   void cb_vel(geometry_msgs::msg::Twist::ConstSharedPtr msg) {
-    if (!target_.has_value()) return;
-    auto& tgt = target_.value();
-    tgt.position[0] = std::abs(msg->linear.x) > 0.05
+    target_.position[0] = std::abs(msg->linear.x) > 0.05
                           ? (cur_pose_.position[0] + msg->linear.x)
-                          : tgt.position[0];
-    tgt.position[1] = std::abs(msg->linear.y) > 0.05
+                          : target_.position[0];
+    target_.position[1] = std::abs(msg->linear.y) > 0.05
                           ? (cur_pose_.position[1] + msg->linear.y)
-                          : tgt.position[1];
-    tgt.position[2] = std::abs(msg->linear.z) > 0.05
+                          : target_.position[1];
+    target_.position[2] = std::abs(msg->linear.z) > 0.05
                           ? (cur_pose_.position[2] + msg->linear.z)
-                          : tgt.position[2];
-    tgt.yaw =
-        std::abs(msg->angular.z) > 0.05 ? (cur_pose_.yaw + msg->angular.z) : tgt.yaw;
+                          : target_.position[2];
+    target_.yaw =
+        std::abs(msg->angular.z) > 0.05 ? (cur_pose_.yaw + msg->angular.z) : target_.yaw;
   }
 
   void cb_goal(geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
@@ -223,8 +221,8 @@ private:
                          {msg->pose.orientation.w, msg->pose.orientation.x,
                           msg->pose.orientation.y, msg->pose.orientation.z});
     RCLCPP_INFO_STREAM(get_logger(),
-                       "goint to: " << target_.value().position.transpose() << " "
-                                    << target_.value().yaw / M_PI * 180.0);
+                       "goint to: " << target_.position.transpose() << " "
+                                    << target_.yaw / M_PI * 180.0);
   }
 
   void cb_50hz() {
@@ -232,8 +230,7 @@ private:
     ctrl_msg_.timestamp = get_clock()->now().nanoseconds() * 1e-3;
     pub_px4_mode_ctrl_->publish(ctrl_msg_);
 #endif
-    if(target_.has_value())
-      go_to_target(target_.value());
+    go_to_target(target_);
   }
 
   void go_to_target(const setpoint_t & tgt) {
@@ -455,7 +452,7 @@ private:
   double min_dist_;
   pose_t cur_pose_;
   pose_t prv_pose_;
-  std::optional<setpoint_t> target_{};
+  setpoint_t target_;
   pid_controller<Eigen::Vector3d> vel_pid_;
   pid_controller<double> yaw_pid_;
   sensor_msgs::msg::LaserScan objs_msg_;
