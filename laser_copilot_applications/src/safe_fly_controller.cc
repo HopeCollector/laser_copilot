@@ -32,12 +32,6 @@ private:
   void init_cb() {
     using std::placeholders::_1;
 #ifdef OPT_CONTROLLER_USE_PX4_MSG
-    sub_px4_odom_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
-        "sub/px4_odom", rclcpp::SensorDataQoS(),
-        std::bind(&safe_fly_controller::cb_px4_odometry, this, _1));
-    // sub_status_ = create_subscription<px4_msgs::msg::VehicleStatus>(
-    //     "/fmu/out/vehicle_status", rclcpp::SensorDataQoS(),
-    //     std::bind(&safe_fly_controller::cb_status, this, _1));
     pub_px4_cmd_ = create_publisher<px4_msgs::msg::TrajectorySetpoint>(
         "/fmu/in/trajectory_setpoint", rclcpp::SensorDataQoS());
     pub_px4_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
@@ -45,13 +39,13 @@ private:
 #endif
 
 #ifdef OPT_CONTROLLER_USE_MAVROS_MSG
-    sub_nav_odom_ = create_subscription<nav_msgs::msg::Odometry>(
-        "sub/mavros/odometry/out", rclcpp::SensorDataQoS(),
-        std::bind(&safe_fly_controller::cb_nav_odometry, this, _1));
     pub_mavros_pos_target_ = create_publisher<mavros_msgs::msg::PositionTarget>(
         "/mavros/setpoint_raw/local", rclcpp::SensorDataQoS());
 #endif
 
+    sub_nav_odom_ = create_subscription<nav_msgs::msg::Odometry>(
+        "sub/odom", rclcpp::SensorDataQoS(),
+        std::bind(&safe_fly_controller::cb_nav_odometry, this, _1));
     sub_vel_ = create_subscription<geometry_msgs::msg::Twist>(
         "sub/vel", 5, std::bind(&safe_fly_controller::cb_vel, this, _1));
     sub_goal_ = create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -109,77 +103,6 @@ private:
     ctrl_msg_.actuator = false;
   }
 
-  void cb_px4_odometry(px4_msgs::msg::VehicleOdometry::ConstSharedPtr msg) {
-    prv_pose_ = cur_pose_;
-    Eigen::Isometry3d T_localflu_odomflu = Eigen::Isometry3d::Identity();
-
-    // set position
-    switch (msg->pose_frame) {
-    case px4_msgs::msg::VehicleOdometry::POSE_FRAME_NED: {
-      Eigen::Isometry3d T_localfrd_odomned = Eigen::Isometry3d::Identity();
-      T_localfrd_odomned.translation() << msg->position[0], msg->position[1],
-          msg->position[2];
-      T_localfrd_odomned.linear() =
-          Eigen::Quaterniond(msg->q[0], msg->q[1], msg->q[2], msg->q[3])
-              .toRotationMatrix();
-      T_localflu_odomflu =
-          T_odomned_odomflu_ * T_localfrd_odomned * T_localflu_localfrd_;
-      break;
-    }
-
-    case px4_msgs::msg::VehicleOdometry::POSE_FRAME_FRD: {
-      Eigen::Isometry3d T_localfrd_odomfrd = Eigen::Isometry3d::Identity();
-      T_localfrd_odomfrd.translation() << msg->position[0], msg->position[1],
-          msg->position[2];
-      T_localfrd_odomfrd.linear() =
-          Eigen::Quaterniond(msg->q[0], msg->q[1], msg->q[2], msg->q[3])
-              .toRotationMatrix();
-      T_localflu_odomflu =
-          T_odomfrd_odomflu_ * T_localfrd_odomfrd * T_localflu_localfrd_;
-      break;
-    }
-
-    default:
-      break;
-    }
-    cur_pose_.position = T_localflu_odomflu.translation();
-    cur_pose_.orientation = T_localflu_odomflu.linear();
-
-    // set velocity
-    cur_pose_.linear_vel << msg->velocity[0], msg->velocity[1],
-        msg->velocity[2];
-    cur_pose_.angle_vel << msg->angular_velocity[0], msg->angular_velocity[1],
-        msg->angular_velocity[2];
-    switch (msg->velocity_frame) {
-    case px4_msgs::msg::VehicleOdometry::VELOCITY_FRAME_NED: {
-      cur_pose_.linear_vel = T_odomned_odomflu_.linear() * cur_pose_.linear_vel;
-      cur_pose_.angle_vel = T_odomned_odomflu_.linear() * cur_pose_.angle_vel;
-      break;
-    }
-
-    case px4_msgs::msg::VehicleOdometry::VELOCITY_FRAME_FRD: {
-      cur_pose_.linear_vel = T_odomfrd_odomflu_.linear() * cur_pose_.linear_vel;
-      cur_pose_.angle_vel = T_odomfrd_odomflu_.linear() * cur_pose_.angle_vel;
-      break;
-    }
-
-    case px4_msgs::msg::VehicleOdometry::VELOCITY_FRAME_BODY_FRD: {
-      cur_pose_.linear_vel = T_localflu_odomflu.linear() *
-                             T_localfrd_localflu_.linear() *
-                             cur_pose_.linear_vel;
-      cur_pose_.angle_vel = T_localflu_odomflu.linear() *
-                            T_localfrd_localflu_.linear() * cur_pose_.angle_vel;
-      break;
-    }
-
-    default:
-      break;
-    }
-
-    cur_pose_.yaw = quaternion_to_yaw(cur_pose_.orientation);
-    cur_pose_.stamp = msg->timestamp * 1000; // us -> ns
-  }
-
   void cb_nav_odometry(nav_msgs::msg::Odometry::ConstSharedPtr msg) {
     const auto& pos = msg->pose.pose.position;
     const auto& ori = msg->pose.pose.orientation;
@@ -195,10 +118,6 @@ private:
     cur_pose_.stamp = static_cast<uint64_t>(msg->header.stamp.sec) *
                           static_cast<uint64_t>(1e9) +
                       static_cast<uint64_t>(msg->header.stamp.nanosec);
-  }
-
-  void cb_status(px4_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
-    RCLCPP_INFO_STREAM(get_logger(), int(msg->arming_state));
   }
 
   void cb_vel(geometry_msgs::msg::Twist::ConstSharedPtr msg) {
@@ -227,10 +146,6 @@ private:
   }
 
   void cb_50hz() {
-#ifdef OPT_CONTROLLER_USE_PX4_MSG
-    ctrl_msg_.timestamp = get_clock()->now().nanoseconds() * 1e-3;
-    pub_px4_mode_ctrl_->publish(ctrl_msg_);
-#endif
     go_to_target(target_);
   }
 
@@ -258,6 +173,8 @@ private:
     vyaw = std::min(std::abs(vyaw), max_yaw_speed_) * vyaw_dir;
 
 #ifdef OPT_CONTROLLER_USE_PX4_MSG
+    ctrl_msg_.timestamp = get_clock()->now().nanoseconds() * 1e-3;
+    pub_px4_mode_ctrl_->publish(ctrl_msg_);
     pub_px4_setpoint(speed_vec, acc_vec, vyaw);
 #endif
 
@@ -418,11 +335,7 @@ private:
   }
 
 private:
-  rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr
-      sub_px4_odom_ = nullptr;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_nav_odom_ =
-      nullptr;
-  rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr sub_status_ =
       nullptr;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal_ =
       nullptr;

@@ -21,7 +21,7 @@ def get_composable_node():
         ],
         remappings=[
             ("sub/px4_odom", "/fmu/out/vehicle_odometry"),
-            ("sub/mavros/odometry/out", "/mavros/odometry/out"),
+            ("sub/odom", "/mavros/odometry/out"),
             ("sub/goal", "/move_base_simple/goal"),
             ("sub/vel", "/joystick_controller/cmd_vel"),
             ("sub/objs", "laser_scan/objs"),
