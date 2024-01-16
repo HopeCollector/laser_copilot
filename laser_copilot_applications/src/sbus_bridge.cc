@@ -72,8 +72,8 @@ private:
     channel_max_ = declare_parameter<int>("channel_max", 2000);
     channel_min_ = declare_parameter<int>("channel_min", 0);
     channel_mid_ = declare_parameter<int>("channel_mid", 1024);
-    speed_ratio_ = max_speed_ / std::max(channel_max_ - channel_mid_,
-                                         channel_mid_ - channel_min_);
+    channel_range_ =
+        std::max(channel_max_ - channel_mid_, channel_mid_ - channel_min_);
   }
 
   void init() {
@@ -129,17 +129,24 @@ private:
       return;
     }
     geometry_msgs::msg::Twist msg;
-    msg.linear.x = channel_to_spped(ctrl_msg_.channels[CHANNEL_PITCH]);
-    msg.linear.y = -channel_to_spped(ctrl_msg_.channels[CHANNEL_ROLL]);
-    msg.linear.z = channel_to_spped(ctrl_msg_.channels[CHANNEL_THROTTLE]);
-    msg.angular.z = -channel_to_spped(ctrl_msg_.channels[CHANNEL_YAW]) /
-                    max_speed_ * max_angular_speed_; // to rad/s
+    msg.linear.x = channel_to_spped(CHANNEL_PITCH);
+    msg.linear.y = -channel_to_spped(CHANNEL_ROLL);
+    msg.linear.z = channel_to_spped(CHANNEL_THROTTLE);
+    msg.angular.z = -channel_to_angular_speed(CHANNEL_YAW);
     pub_twist_->publish(msg);
   }
 
-  double channel_to_spped(uint16_t val) {
-    auto err = val - channel_mid_;
-    return std::abs(err) < deadzone_ ? 0 : err * speed_ratio_;
+  double map_channel(uint8_t id) {
+    double err = ctrl_msg_.channels[id] - channel_mid_;
+    return std::abs(err) < deadzone_ ? 0 : err / channel_range_;
+  }
+
+  double channel_to_spped(uint8_t id) {
+    return map_channel(id) * max_speed_;
+  }
+
+  double channel_to_angular_speed(uint8_t id) {
+    return map_channel(id) * max_angular_speed_;
   }
 
 private:
@@ -154,7 +161,7 @@ private:
   uint16_t channel_max_;
   uint16_t channel_min_;
   uint16_t channel_mid_;
-  double speed_ratio_;
+  double channel_range_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::array<uint8_t, BUFFER_SIZE> buf_;
   ctrl_msg_t ctrl_msg_;
