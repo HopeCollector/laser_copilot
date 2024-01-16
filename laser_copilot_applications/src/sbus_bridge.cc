@@ -60,6 +60,8 @@ public:
 
 private:
   void load_param() {
+    device_path_ = 
+      declare_parameter<std::string>("device_path", "/dev/ttyUSB0");
     max_speed_ = declare_parameter<double>("max_speed", 2.0);
     max_angular_speed_ =
         declare_parameter<double>("max_angular_speed", 30.0) * DEG_TO_RAD;
@@ -80,7 +82,7 @@ private:
     using namespace std::chrono_literals;
     dev_ = serial_new();
     pub_twist_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 1);
-    if (int err = serial_open_advanced(dev_, "/dev/ttyUSB0", baudrate_, 8,
+    if (int err = serial_open_advanced(dev_, device_path_.c_str(), baudrate_, 8,
                                        serial_parity_t::PARITY_NONE, 1, false,
                                        false)) {
       RCLCPP_FATAL_STREAM(
@@ -151,6 +153,7 @@ private:
 
 private:
   serial_t* dev_;
+  std::string device_path_;
   double max_speed_;
   double max_angular_speed_;
   int read_time_ms_;

@@ -15,6 +15,7 @@ def get_composable_node():
         name="sbus_bridge",
         parameters=[
             {
+                "device_path": "/dev/ttyUSB0",
                 "max_speed": 2.0,
                 "max_angular_speed": 30.0,
                 "read_time_ms": 20,
