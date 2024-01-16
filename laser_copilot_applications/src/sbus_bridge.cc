@@ -35,25 +35,6 @@ struct ctrl_msg_t {
     }
   }
 
-  void from_sbus_msg(const std::array<uint8_t, BUFFER_SIZE> &buf) {
-    channels.at(0) = ((uint16_t(buf[1]) | uint16_t(uint16_t(buf[2])) << 8) & 0x07FF);
-    channels.at(1) = ((uint16_t(buf[2]) >> 3 | uint16_t(buf[3]) << 5) & 0x07FF);
-    channels.at(2) = ((uint16_t(buf[3]) >> 6 | uint16_t(buf[4]) << 2 | uint16_t(buf[5]) << 10) & 0x07FF);
-    channels.at(3) = ((uint16_t(buf[5]) >> 1 | uint16_t(buf[6]) << 7) & 0x07FF);
-    channels.at(4) = ((uint16_t(buf[6]) >> 4 | uint16_t(buf[7]) << 4) & 0x07FF);
-    channels.at(5) = ((uint16_t(buf[7]) >> 7 | uint16_t(buf[8]) << 1 | uint16_t(buf[9]) << 9) & 0x07FF);
-    channels.at(6) = ((uint16_t(buf[9]) >> 2 | uint16_t(buf[10]) << 6) & 0x07FF);
-    channels.at(7) = ((uint16_t(buf[10]) >> 5 | uint16_t(buf[11]) << 3) & 0x07FF);
-    channels.at(8) = ((uint16_t(buf[12]) | uint16_t(buf[13]) << 8) & 0x07FF);
-    channels.at(9) = ((uint16_t(buf[13]) >> 3 | uint16_t(buf[14]) << 5) & 0x07FF);
-    channels.at(10) = ((uint16_t(buf[14]) >> 6 | uint16_t(buf[15]) << 2 | uint16_t(buf[16]) << 10) & 0x07FF);
-    channels.at(11) = ((uint16_t(buf[16]) >> 1 | uint16_t(buf[17]) << 7) & 0x07FF);
-    channels.at(12) = ((uint16_t(buf[17]) >> 4 | uint16_t(buf[18]) << 4) & 0x07FF);
-    channels.at(13) = ((uint16_t(buf[18]) >> 7 | uint16_t(buf[19]) << 1 | uint16_t(buf[20]) << 9) & 0x07FF);
-    channels.at(14) = ((uint16_t(buf[20]) >> 2 | uint16_t(buf[21]) << 6) & 0x07FF);
-    channels.at(15) = ((uint16_t(buf[21]) >> 5 | uint16_t(buf[22]) << 3) & 0x07FF);
-  }
-
   std::string to_str() const {
     std::stringstream ss;
     ss << "channels: ";
@@ -99,60 +80,26 @@ private:
     using namespace std::chrono_literals;
     dev_ = serial_new();
     pub_twist_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 1);
-    switch (serial_type_)
-    {
-    case serial_type_t::DECODED:
-      RCLCPP_INFO_STREAM(get_logger(), "serial type: decoded");
-      if (int err = serial_open_advanced(dev_, "/dev/ttyUSB0", baudrate_, 8,
-                                         serial_parity_t::PARITY_NONE, 1, false,
-                                         false)) {
-        RCLCPP_FATAL_STREAM(
-            get_logger(),
-            "serial_open_adavanced() failed, error: " << serial_errmsg(dev_));
-        exit(err);
-      }
-      timer_ = create_wall_timer(50ms, [this](){
-        if (!this->read_one_msg(DECODED_PACKET_SIZE)) {
-          RCLCPP_WARN_STREAM(get_logger(), "read msg failed");
-          return;
-        }
-        if (!this->is_decoded_msg_ok()) {
-          RCLCPP_WARN_STREAM(get_logger(), "decoded msg check failed");
-          return;
-        }
-        this->ctrl_msg_.from_decoded_msg(this->buf_);
-        this->pub_ctrl_msg();
-      });
-      break;
-    case serial_type_t::SBUS:
-      RCLCPP_INFO_STREAM(get_logger(), "serial type: sbus");
-      if (int err = serial_open_advanced(dev_, "/dev/ttyUSB0", SBUS_BAUD_RATE, 8,
-                                         serial_parity_t::PARITY_EVEN, 2, false,
-                                         false)) {
-        RCLCPP_FATAL_STREAM(
-            get_logger(),
-            "serial_open_adavanced() failed, error: " << serial_errmsg(dev_));
-        exit(err);
-      }
-      read_time_ms_ = 14;
-      timer_ = create_wall_timer(50ms, [this](){
-        if (!this->read_one_msg(SBUS_PACKET_SIZE)) {
-          RCLCPP_WARN_STREAM(get_logger(), "read msg failed");
-          return;
-        }
-        if (!this->is_sbus_msg_ok()) {
-          RCLCPP_WARN_STREAM(get_logger(), "sbus msg check failed");
-          return;
-        }
-        this->ctrl_msg_.from_sbus_msg(this->buf_);
-        this->pub_ctrl_msg();
-      });
-      break;
-    default:
-      RCLCPP_FATAL_STREAM(get_logger(), "unknown serial type");
-      exit(-1);
-      break;
+    if (int err = serial_open_advanced(dev_, "/dev/ttyUSB0", baudrate_, 8,
+                                       serial_parity_t::PARITY_NONE, 1, false,
+                                       false)) {
+      RCLCPP_FATAL_STREAM(
+          get_logger(),
+          "serial_open_adavanced() failed, error: " << serial_errmsg(dev_));
+      exit(err);
     }
+    timer_ = create_wall_timer(50ms, [this]() {
+      if (!this->read_one_msg(DECODED_PACKET_SIZE)) {
+        RCLCPP_WARN_STREAM(get_logger(), "read msg failed");
+        return;
+      }
+      if (!this->is_decoded_msg_ok()) {
+        RCLCPP_WARN_STREAM(get_logger(), "decoded msg check failed");
+        return;
+      }
+      this->ctrl_msg_.from_decoded_msg(this->buf_);
+      this->pub_ctrl_msg();
+    });
   }
 
   bool read_one_msg(int pkg_size) {
@@ -175,10 +122,6 @@ private:
       check ^= buf_[i];
     }
     return check == buf_[DECODED_PACKET_SIZE - 1];
-  }
-
-  bool is_sbus_msg_ok() {
-    return buf_[0] == PACKET_HEAD && buf_[SBUS_PACKET_SIZE - 1] == 0x00;
   }
 
   void pub_ctrl_msg() {
@@ -213,7 +156,7 @@ private:
   uint16_t channel_mid_;
   double speed_ratio_;
   rclcpp::TimerBase::SharedPtr timer_;
-  std::array<uint8_t, 100> buf_;
+  std::array<uint8_t, BUFFER_SIZE> buf_;
   ctrl_msg_t ctrl_msg_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_twist_;
 };

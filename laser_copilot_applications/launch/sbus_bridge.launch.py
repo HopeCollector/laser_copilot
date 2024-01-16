@@ -19,7 +19,6 @@ def get_composable_node():
                 "max_angular_speed": 30.0,
                 "read_time_ms": 20,
                 "baudrate": 115200,
-                "serial_type": 0,  # 0: decoded, 1: sbus
                 "enable_channel": 5,
                 "deadzone": 20,
                 "channel_max": 1722,
