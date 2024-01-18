@@ -26,6 +26,7 @@ def get_composable_node():
             }
         ],
         remappings=[
+            ("sub/odom", "/mavros/odometry/out"),
             ("pub/setpoint", "/move_base_simple/goal"),
             ("pub/path", "replayer/pub/path"),
         ],
