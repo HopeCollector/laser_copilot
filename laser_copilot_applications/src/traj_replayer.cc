@@ -37,8 +37,8 @@ private:
         create_publisher<nav_msgs::msg::Path>("pub/path", 5);
 
     using namespace std::chrono_literals;
-    timer_10hz_ =
-        create_wall_timer(100ms, std::bind(&traj_replayer::cb_10hz, this));
+    timer_100hz_ =
+        create_wall_timer(10ms, std::bind(&traj_replayer::cb_100hz, this));
     timer_1hz_ = create_wall_timer(1s, std::bind(&traj_replayer::cb_1hz, this));
     
   }
@@ -110,7 +110,7 @@ private:
     pub_path_->publish(msg);
   }
 
-  void cb_10hz() {
+  void cb_100hz() {
     if (is_need_update_sp()) setpoints_.pop_front();
     auto sp = setpoints_.front().to_affine();
 
@@ -140,7 +140,7 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_sp_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_;
   rclcpp::TimerBase::SharedPtr timer_1hz_;
-  rclcpp::TimerBase::SharedPtr timer_10hz_;
+  rclcpp::TimerBase::SharedPtr timer_100hz_;
   std::deque<setpoint_t> setpoints_;
   pose_t cur_pose_;
   Eigen::Affine3d T_odomflu_odomned_ = Eigen::Affine3d::Identity();
