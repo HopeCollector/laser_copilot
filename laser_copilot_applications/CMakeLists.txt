@@ -13,6 +13,10 @@ ament_auto_find_build_dependencies ()
 
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
+find_package(PkgConfig REQUIRED)
+set(ENV{PKG_CONFIG_PATH} "${CMAKE_INSTALL_PREFIX}/../periphery/lib/pkgconfig")
+pkg_check_modules(PKG_periphery REQUIRED IMPORTED_TARGET libperiphery)
+# find_package(periphery REQUIRED)
 
 ament_auto_add_library(obj_dist_component SHARED src/obj_dist_node.cpp)
 target_link_libraries(obj_dist_component ${PCL_LIBRARIES})
@@ -42,11 +46,8 @@ rclcpp_components_register_nodes(visualization_helper_component
 )
 
 ament_auto_add_library(sbus_bridge_component SHARED src/sbus_bridge.cc)
-target_include_directories(sbus_bridge_component
-  PRIVATE ${CMAKE_INSTALL_PREFIX}/../periphery/include)
-target_link_directories(sbus_bridge_component BEFORE
-  PRIVATE ${CMAKE_INSTALL_PREFIX}/../periphery/lib)
-target_link_libraries(sbus_bridge_component periphery)
+target_link_libraries(sbus_bridge_component PkgConfig::PKG_periphery)
+# target_link_libraries(sbus_bridge_component periphery::periphery)
 rclcpp_components_register_nodes(sbus_bridge_component
   "laser_copilot_applications::sbus_bridge"
 )

@@ -1,7 +1,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <chrono>
 #include <geometry_msgs/msg/twist.hpp>
-#include "periphery/serial.h"
+#include "serial.h"
 #include "common.hh"
 
 namespace laser_copilot_applications {
