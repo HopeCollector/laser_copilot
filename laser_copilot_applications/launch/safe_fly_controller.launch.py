@@ -20,7 +20,6 @@ def get_composable_node():
             }
         ],
         remappings=[
-            ("sub/px4_odom", "/fmu/out/vehicle_odometry"),
             ("sub/odom", "/mavros/odometry/out"),
             ("sub/goal", "/move_base_simple/goal"),
             ("sub/vel", "sbus_bridge/cmd_vel"),
