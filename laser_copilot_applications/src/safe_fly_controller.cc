@@ -32,6 +32,9 @@ private:
   void init_cb() {
     using std::placeholders::_1;
 #ifdef OPT_CONTROLLER_USE_PX4_MSG
+    sub_px4_odom_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
+        "/fmu/out/vehicle_odometry", rclcpp::SensorDataQoS(),
+        std::bind(&safe_fly_controller::cb_px4_odom, this, _1));
     pub_px4_cmd_ = create_publisher<px4_msgs::msg::TrajectorySetpoint>(
         "/fmu/in/trajectory_setpoint", rclcpp::SensorDataQoS());
     pub_px4_mode_ctrl_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
@@ -43,9 +46,6 @@ private:
         "/mavros/setpoint_raw/local", rclcpp::SensorDataQoS());
 #endif
 
-    sub_nav_odom_ = create_subscription<nav_msgs::msg::Odometry>(
-        "sub/odom", rclcpp::SensorDataQoS(),
-        std::bind(&safe_fly_controller::cb_nav_odometry, this, _1));
     sub_vel_ = create_subscription<geometry_msgs::msg::Twist>(
         "sub/vel", 5, std::bind(&safe_fly_controller::cb_vel, this, _1));
     sub_goal_ = create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -59,6 +59,10 @@ private:
 
     timer_once_1s_ = create_wall_timer(1s, [this]() {
       this->timer_once_1s_->cancel();
+      this->sub_px4_odom_.reset(); // cancle px4 sub
+      this->sub_nav_odom_ = create_subscription<nav_msgs::msg::Odometry>(
+          "sub/odom", rclcpp::SensorDataQoS(),
+          std::bind(&safe_fly_controller::cb_nav_odometry, this, _1));
       this->T_odomflu_odomned_.linear() = Eigen::Matrix3d(
           Eigen::AngleAxisd(this->cur_pose_.yaw, Eigen::Vector3d::UnitZ()) *
           Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
@@ -119,6 +123,11 @@ private:
     cur_pose_.stamp = static_cast<uint64_t>(msg->header.stamp.sec) *
                           static_cast<uint64_t>(1e9) +
                       static_cast<uint64_t>(msg->header.stamp.nanosec);
+  }
+
+  void cb_px4_odom(px4_msgs::msg::VehicleOdometry::ConstSharedPtr msg) {
+    cur_pose_.yaw = quaternion_to_yaw(Eigen::Quaterniond(
+        msg->q[0], msg->q[1], msg->q[2], msg->q[3]));
   }
 
   void cb_vel(geometry_msgs::msg::Twist::ConstSharedPtr msg) {
@@ -261,7 +270,7 @@ private:
     }
     double speed = setpoint.norm();
     setpoint.normalize();
-    adjust_move_direction(setpoint);
+    // adjust_move_direction(setpoint);
     adjust_speed(setpoint, speed);
   }
 
@@ -344,6 +353,8 @@ private:
 private:
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_nav_odom_ =
       nullptr;
+  rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr
+      sub_px4_odom_ = nullptr;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal_ =
       nullptr;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_objs_ =
