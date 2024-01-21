@@ -151,9 +151,10 @@ private:
                                                      : msg->pose.position.z},
                          {msg->pose.orientation.w, msg->pose.orientation.x,
                           msg->pose.orientation.y, msg->pose.orientation.z});
-    RCLCPP_INFO_STREAM(get_logger(),
-                       "goint to: " << target_.position.transpose() << " "
-                                    << target_.yaw / M_PI * 180.0);
+    RCLCPP_INFO_STREAM_THROTTLE(get_logger(), *get_clock(), 500,
+                                "goint to: " << target_.position.transpose()
+                                             << " "
+                                             << target_.yaw / M_PI * 180.0);
   }
 
   void cb_50hz() { go_to_target(target_); }
