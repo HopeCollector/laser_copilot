@@ -111,7 +111,10 @@ private:
   }
 
   void cb_100hz() {
-    if (is_need_update_sp()) setpoints_.pop_front();
+    if (setpoints_.empty()) 
+      return;
+    if (is_need_update_sp())
+      setpoints_.pop_front();
     auto sp = setpoints_.front().to_affine();
 
     Eigen::Vector3d position {sp.translation()};
@@ -130,9 +133,9 @@ private:
   }
 
   bool is_need_update_sp() {
-    bool is_ok = false;
-    is_ok = (cur_pose_.position - setpoints_.front().position).norm() < 3;
-    return is_ok && setpoints_.size() > 1;
+    bool norm_ok = false;
+    norm_ok = (cur_pose_.position - setpoints_.front().position).norm() < 3;
+    return norm_ok && setpoints_.size() > 1;
   }
 
 private:
