@@ -111,12 +111,15 @@ private:
   }
 
   void cb_100hz() {
-    if (setpoints_.empty()) 
+    if (setpoints_.empty()) {
+      RCLCPP_INFO(get_logger(), "traj replay finish, node exit!");
+      exit(0);
+    }
+    if (!is_need_update_sp()) {
       return;
-    if (is_need_update_sp())
-      setpoints_.pop_front();
+    }
     auto sp = setpoints_.front().to_affine();
-
+    setpoints_.pop_front();
     Eigen::Vector3d position {sp.translation()};
     Eigen::Quaterniond orientation{sp.linear()};
     geometry_msgs::msg::PoseStamped msg;
