@@ -81,7 +81,7 @@ class people_tracker(Node):
 
     def __to_odom_frame(self, pos: PoseStamped) -> PoseStamped:
         try:
-            t = self.__tf_buffer.lookup_transform(ODOM_FRAME, pos.header.frame_id, 0)
+            t = self.__tf_buffer.lookup_transform(ODOM_FRAME, pos.header.frame_id, Time())
             return tf_cvt.do_transform_pose_stamped(pos, t)
         except TransformException as e:
             self.get_logger().error(
