@@ -90,7 +90,7 @@ class people_tracker(Node):
             return None
 
     def __publish_target(self, obj: oak.TrackedObj):
-        p = np.ndarray(obj.pos_xyz)
+        p = np.array(obj.pos_xyz)
         norm_target = np.linalg.norm([-p[0], -p[1], 0])
         target = p + MIN_FELLOW_DIST * norm_target
         _, _, yaw = obj.pos_ball
