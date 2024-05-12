@@ -107,7 +107,6 @@ class people_tracker(Node):
         pose_msg.pose.orientation.w = q.w
         pose_msg = self.__to_odom_frame(pose_msg)
         if pose_msg is not None:
-            self.get_logger().info(f"publish goal: {pose_msg}")
             self.__pub_tgt.publish(pose_msg)
 
     def cb_oak(self, pkgs: Dict[int, oak.TrackedObj], img: Optional[np.ndarray]):
