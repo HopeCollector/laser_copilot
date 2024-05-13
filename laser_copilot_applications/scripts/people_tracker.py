@@ -5,9 +5,10 @@ import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
 from geometry_msgs.msg import PoseStamped, TransformStamped
+from foxglove_msgs.msg import ImageAnnotations, PointsAnnotation, TextAnnotation, Point2, Color
 from sensor_msgs.msg import CompressedImage
 import numpy as np
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 import cv2
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from tf2_ros import TransformException
@@ -42,6 +43,33 @@ tf_msg.transform.rotation.y = CAM_INSTALL_Q.y
 tf_msg.transform.rotation.z = CAM_INSTALL_Q.z
 tf_msg.transform.rotation.w = CAM_INSTALL_Q.w
 
+color_map: Dict[int, Color] = {}
+
+def create_bbox_msg(obj: oak.TrackedObj, id: int, stamp: Time) -> PointsAnnotation:
+    mkr = PointsAnnotation()
+    mkr.timestamp = stamp.to_msg()
+    mkr.type = PointsAnnotation.LINE_LOOP
+    mkr.outline_color = color_map[id]
+    mkr.thickness = 5.0
+    bbox = [float(x) for x in obj.bbox]
+    mkr.points = [
+        Point2(x=bbox[0], y=bbox[1]),
+        Point2(x=bbox[2], y=bbox[1]),
+        Point2(x=bbox[2], y=bbox[3]),
+        Point2(x=bbox[0], y=bbox[3]),
+    ]
+    return mkr
+
+def create_text_msg(obj: oak.TrackedObj, id: int, stamp: Time) -> TextAnnotation:
+    txt = TextAnnotation()
+    txt.timestamp = stamp.to_msg()
+    x, y, _, _ = obj.bbox
+    txt.font_size = 20.0
+    txt.position = Point2(x=float(x), y=float(y)+2*txt.font_size)
+    txt.text = f"id: {id}\n{obj.distance:.2f}m"
+    txt.text_color = Color(r=0.0, g=0.0, b=0.0, a=1.0)
+    txt.background_color = Color(r=1.0, g=1.0, b=1.0, a=0.7)
+    return txt
 
 class people_tracker(Node):
     def __init__(self):
@@ -50,6 +78,7 @@ class people_tracker(Node):
         self.__pub_img = self.create_publisher(
             CompressedImage, "out/image", 3
         )
+        self.__pub_annotation = self.create_publisher(ImageAnnotations, "out/annotations", 3)
         self.__pub_tgt = self.create_publisher(PoseStamped, "out/goal", 3)
         self.declare_parameter("track_people_id", 0)
         # Preventing oak module from reading ros parameters, causing startup failure
@@ -73,14 +102,28 @@ class people_tracker(Node):
         self.__tf_camera_to_body.sendTransform(tf_msg)
         pass
 
-    def __publish_img(self, img: np.ndarray):
+    def __publish_img(self, img: np.ndarray, stamp: Time):
         result, encimg = cv2.imencode(".jpeg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 10])
         if result:
             img_msg = CompressedImage()
-            img_msg.header.stamp = self.get_clock().now().to_msg()
+            img_msg.header.stamp = stamp.to_msg()
+            img_msg.header.frame_id = OAK_FRAME
             img_msg.format = "jpeg"
             img_msg.data = encimg.tobytes()
             self.__pub_img.publish(img_msg)
+
+    def __publish_annotations(self, objs: Dict[int, oak.TrackedObj], stamp: Time):
+        msg = ImageAnnotations()
+        for id, obj in objs.items():
+            if id not in color_map:
+                color = np.random.choice(range(256), size=3) / 255.0
+                color_map[id] = Color(a=1.0, r=color[0], g=color[1], b=color[2])
+            try:
+                msg.points.append(create_bbox_msg(obj, id, stamp))
+                msg.texts.append(create_text_msg(obj, id, stamp))
+            except Exception as e:
+                self.get_logger().error(f"failed to publish annotation: {e}")
+        self.__pub_annotation.publish(msg)
 
     def __to_odom_frame(self, pos: PoseStamped) -> PoseStamped:
         try:
@@ -115,7 +158,9 @@ class people_tracker(Node):
     def cb_oak(self, pkgs: Dict[int, oak.TrackedObj], img: Optional[np.ndarray]):
         if not rclpy.ok() or img is None:
             return
-        self.__publish_img(img)
+        stamp = self.get_clock().now()
+        self.__publish_img(img, stamp)
+        self.__publish_annotations(pkgs, stamp)
         self.__id = int(self.get_parameter("track_people_id").value)
         if self.__id in pkgs:
             self.__publish_target(pkgs[self.__id])
