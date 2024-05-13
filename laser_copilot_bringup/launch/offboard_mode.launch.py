@@ -36,6 +36,7 @@ def generate_launch_description():
             declare_param("use_gui", "false"),
             declare_param("use_sim_time", "false"),
             declare_param("use_controller", "false"),
+            declare_param("use_people_tracker", "false"),
             ComposableNodeContainer(
                 name="container",
                 namespace="",
@@ -50,5 +51,8 @@ def generate_launch_description():
             launch_other_file(pkg_name_app, "obj_dist.launch.py"),
             launch_in_condition(pkg_name_app, "sbus_bridge.launch.py", "use_controller"),
             launch_in_condition(pkg_name_app, "visualization.launch.py", "use_gui"),
+            launch_in_condition(
+                pkg_name_app, "people_tracker.launch.py", "use_people_tracker"
+            ),
         ]
     )
