@@ -16,6 +16,7 @@ from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs as tf_cvt
 from pyquaternion import Quaternion
 import math
+import sys
 
 ODOM_FRAME = "odom"
 BASE_FRAME = "base_link"
@@ -51,6 +52,8 @@ class people_tracker(Node):
         )
         self.__pub_tgt = self.create_publisher(PoseStamped, "out/goal", 3)
         self.declare_parameter("track_people_id", 0)
+        # Preventing oak module from reading ros parameters, causing startup failure
+        sys.argv = sys.argv[0]
         self.__cam = oak.oak_camera(self.cb_oak)
         self.__cam.start()
         self.__tf_camera_to_body = StaticTransformBroadcaster(self)
@@ -123,7 +126,7 @@ class people_tracker(Node):
 
 
 if __name__ == "__main__":
-    rclpy.init()
+    rclpy.init(args=sys.argv)
     node = people_tracker()
     rclpy.spin(node)
     node.destroy_node()
