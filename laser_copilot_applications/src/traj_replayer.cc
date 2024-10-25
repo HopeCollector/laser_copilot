@@ -137,7 +137,7 @@ private:
 
   bool is_need_update_sp() {
     bool norm_ok = false;
-    norm_ok = (cur_pose_.position - setpoints_.front().position).norm() < 3;
+    norm_ok = (cur_pose_.position - setpoints_.front().position).norm() < 3;  //修改3m小于起飞高度，解决初始斜着飞的bug
     return norm_ok && setpoints_.size() > 1;
   }
 

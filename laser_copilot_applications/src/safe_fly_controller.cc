@@ -147,7 +147,7 @@ private:
 
   void cb_goal(geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
     target_ = setpoint_t({msg->pose.position.x, msg->pose.position.y,
-                          msg->pose.position.z < 0.2 ? cur_pose_.position.z()
+                          msg->pose.position.z < 0.2 ? 0.2  //解决中途悬停的bug
                                                      : msg->pose.position.z},
                          {msg->pose.orientation.w, msg->pose.orientation.x,
                           msg->pose.orientation.y, msg->pose.orientation.z});
