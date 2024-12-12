@@ -43,7 +43,7 @@ private:
   }
 
   void cb_lvx(livox_ros_driver2::msg::CustomMsg::ConstSharedPtr msg) {
-    static sensor_msgs::msg::LaserScan prv_ls;
+    // static sensor_msgs::msg::LaserScan prv_ls;  //注释掉
     sensor_msgs::msg::LaserScan ls = new_laser_scan_msg(msg->header);
     ls.scan_time = msg->points.back().offset_time / 1e9f;
     ls.time_increment = ls.scan_time / msg->point_num;
@@ -60,6 +60,7 @@ private:
       range_max = std::max(range, range_max);
       range_min = std::min(range, range_min);
     }
+    static sensor_msgs::msg::LaserScan prv_ls=ls;  //初始化上一帧数据prv_ls
     if (range_max == 0.0 && prv_ls.range_max != 0.0) {
       prv_ls.header = ls.header;
       ls = prv_ls;
